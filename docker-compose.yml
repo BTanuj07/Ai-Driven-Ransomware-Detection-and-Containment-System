@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: arcs-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - arcs-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: arcs-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - arcs-network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: arcs-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - arcs-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: arcs-backend
+    depends_on:
+      - kafka
+    ports:
+      - "8000:8000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MONGODB_URL: mongodb://tanuj:tanuj1234@ac-utvb68u-shard-00-00.ushqevx.mongodb.net:27017,ac-utvb68u-shard-00-01.ushqevx.mongodb.net:27017,ac-utvb68u-shard-00-02.ushqevx.mongodb.net:27017/?ssl=true&replicaSet=atlas-a4hgsp-shard-0&authSource=admin&appName=Major
+    volumes:
+      - ./backend:/app
+    networks:
+      - arcs-network
+    command: python main.py
+
+volumes:
+  mongodb_data:
+
+networks:
+  arcs-network:
+    driver: bridge
