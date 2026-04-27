@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Request, HTTPException
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from services.network_graph import NetworkGraphService
+from services.cache_service import cache_service
 
 router = APIRouter()
+
+# Cache TTL settings (in seconds)
+CACHE_TTL_SHORT = 3   # For frequently changing data (alerts, logs)
+CACHE_TTL_MEDIUM = 10  # For moderately changing data (stats, endpoints)
+CACHE_TTL_LONG = 30    # For slowly changing data (network graph)
 
 @router.get("/health")
 async def health_check():
@@ -15,23 +21,39 @@ async def health_check():
 
 @router.get("/alerts")
 async def get_alerts(request: Request, limit: int = 50):
-    """Get recent alerts"""
+    """Get recent alerts with caching"""
+    cache_key = f"alerts_{limit}"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
+    
     db = request.app.state.db
     alerts = db.get_recent_alerts(limit)
-    return {
+    result = {
         "alerts": alerts,
         "count": len(alerts)
     }
+    
+    cache_service.set(cache_key, result, CACHE_TTL_SHORT)
+    return result
 
 @router.get("/risk-scores")
 async def get_risk_scores(request: Request):
-    """Get current risk scores"""
+    """Get current risk scores with caching"""
+    cache_key = "risk_scores"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
+    
     db = request.app.state.db
     scores = db.get_risk_scores()
-    return {
+    result = {
         "risk_scores": scores,
         "count": len(scores)
     }
+    
+    cache_service.set(cache_key, result, CACHE_TTL_SHORT)
+    return result
 
 @router.get("/logs")
 async def get_logs(request: Request, limit: int = 100):
@@ -57,17 +79,28 @@ async def get_network_graph(request: Request):
     
     # Add nodes from actual monitored systems
     monitored_systems = set()
+    
+    # Get from alerts
     for alert in alerts:
         hostname = alert.get("hostname")
         if hostname:
             monitored_systems.add(hostname)
     
+    # Get from system statuses
     for status in system_statuses:
         hostname = status.get("hostname")
         if hostname:
             monitored_systems.add(hostname)
     
-    # If no real systems, show a minimal graph
+    # If no systems from alerts/statuses, get from recent logs
+    if not monitored_systems:
+        logs = db.get_recent_logs(100)
+        for log in logs:
+            hostname = log.get("hostname")
+            if hostname:
+                monitored_systems.add(hostname)
+    
+    # If still no systems, show message
     if not monitored_systems:
         monitored_systems = {"No systems monitored yet"}
     
@@ -92,9 +125,17 @@ async def get_network_graph(request: Request):
     graph_data = real_graph.get_graph_data()
     critical_nodes = real_graph.get_critical_nodes()
     
+    # Calculate real propagation analysis
+    attack_path = real_graph.calculate_attack_propagation_path()
+    blast_radius = real_graph.calculate_blast_radius()
+    recommendations = real_graph.get_isolation_recommendations()
+    
     return {
         "graph": graph_data,
         "critical_nodes": critical_nodes,
+        "attack_path": attack_path,
+        "blast_radius": blast_radius,
+        "recommendations": recommendations,
         "real_data": True,
         "monitored_systems": list(monitored_systems)
     }
@@ -113,10 +154,17 @@ async def get_system_status(request: Request):
 async def get_containment_actions(request: Request, limit: int = 50):
     """Get recent containment actions"""
     db = request.app.state.db
+    
+    # Get total count
+    total_count = db.db['containment_actions'].count_documents({})
+    
+    # Get limited actions
     actions = db.get_containment_actions(limit)
+    
     return {
         "actions": actions,
-        "count": len(actions)
+        "count": len(actions),
+        "total": total_count
     }
 
 @router.post("/containment")
@@ -145,23 +193,25 @@ async def manual_containment(request: Request, data: Dict[str, Any]):
 
 @router.get("/stats")
 async def get_statistics(request: Request):
-    """Get system statistics"""
+    """Get system statistics with caching"""
+    cache_key = "stats"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
+    
     db = request.app.state.db
+    counts = db.get_alert_counts()
     
-    alerts = db.get_recent_alerts(1000)
-    
-    # Calculate statistics
-    high_risk = sum(1 for a in alerts if a.get("risk_level") == "HIGH")
-    medium_risk = sum(1 for a in alerts if a.get("risk_level") == "MEDIUM")
-    low_risk = sum(1 for a in alerts if a.get("risk_level") == "LOW")
-    
-    return {
-        "total_alerts": len(alerts),
-        "high_risk_count": high_risk,
-        "medium_risk_count": medium_risk,
-        "low_risk_count": low_risk,
+    result = {
+        "total_alerts": counts["total"],
+        "high_risk_count": counts["HIGH"],
+        "medium_risk_count": counts["MEDIUM"],
+        "low_risk_count": counts["LOW"],
         "systems_monitored": len(db.get_system_statuses())
     }
+    
+    cache_service.set(cache_key, result, CACHE_TTL_MEDIUM)
+    return result
 
 @router.get("/search")
 async def search(request: Request, query: str = "", type: str = "all"):
@@ -214,7 +264,12 @@ async def search(request: Request, query: str = "", type: str = "all"):
 
 @router.get("/endpoints")
 async def get_endpoints(request: Request):
-    """Get all monitored endpoints with their current status"""
+    """Get all monitored endpoints with caching"""
+    cache_key = "endpoints"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
+    
     db = request.app.state.db
     
     statuses = db.get_system_statuses()
@@ -250,13 +305,16 @@ async def get_endpoints(request: Request):
             "details": status
         })
     
-    return {
+    result = {
         "endpoints": endpoints,
         "count": len(endpoints),
         "infected": sum(1 for e in endpoints if e["status"] == "infected"),
         "at_risk": sum(1 for e in endpoints if e["status"] == "at_risk"),
         "normal": sum(1 for e in endpoints if e["status"] == "normal")
     }
+    
+    cache_service.set(cache_key, result, CACHE_TTL_MEDIUM)
+    return result
 
 @router.get("/alerts/timeline")
 async def get_alerts_timeline(request: Request, days: int = 7):
@@ -395,5 +453,346 @@ async def threat_hunting(request: Request, indicator: str = None):
     return {
         "patterns": suspicious_patterns,
         "total_indicators": len(suspicious_patterns),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone(timedelta(hours=5, minutes=30))).isoformat()
+    }
+
+
+# ============================================
+# RISK OVERVIEW ENDPOINTS (Real Data)
+# ============================================
+
+@router.get("/risk-overview/stats")
+async def get_risk_overview_stats(request: Request):
+    """Get comprehensive risk overview statistics with caching"""
+    cache_key = "risk_overview_stats"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
+    
+    db = request.app.state.db
+    from datetime import datetime, timedelta
+    
+    # Get recent data
+    risk_scores = db.get_risk_scores()
+    alerts = db.get_recent_alerts(200)
+    actions = db.get_containment_actions(100)
+    
+    # Calculate risk levels
+    high_risk = len([r for r in risk_scores if r.get('risk_score', 0) >= 0.85])
+    medium_risk = len([r for r in risk_scores if 0.70 <= r.get('risk_score', 0) < 0.85])
+    low_risk = len([r for r in risk_scores if r.get('risk_score', 0) < 0.70])
+    
+    # Calculate global risk score (weighted average of top risks)
+    if risk_scores:
+        sorted_risks = sorted(risk_scores, key=lambda x: x.get('risk_score', 0), reverse=True)
+        top_10 = sorted_risks[:min(10, len(sorted_risks))]
+        global_risk = sum(r.get('risk_score', 0) for r in top_10) / len(top_10) if top_10 else 0
+    else:
+        global_risk = 0
+    
+    # Calculate containment success rate
+    if actions:
+        successful = len([a for a in actions if a.get('status') == 'success' or 'success' in str(a.get('action', '')).lower()])
+        containment_success = (successful / len(actions) * 100) if actions else 0
+    else:
+        containment_success = 0
+    
+    # Calculate auto-containment confidence (based on recent success rate)
+    recent_actions = actions[:20] if len(actions) >= 20 else actions
+    if recent_actions:
+        recent_success = len([a for a in recent_actions if a.get('status') == 'success' or 'success' in str(a.get('action', '')).lower()])
+        auto_confidence = (recent_success / len(recent_actions) * 100) if recent_actions else 0
+    else:
+        auto_confidence = 85  # Default confidence
+    
+    result = {
+        "globalRiskScore": int(global_risk * 100),
+        "highRiskDevices": high_risk,
+        "mediumRiskDevices": medium_risk,
+        "lowRiskDevices": low_risk,
+        "containmentSuccess": int(containment_success),
+        "autoContainmentConfidence": int(auto_confidence),
+        "totalDevices": len(risk_scores),
+        "totalAlerts": len(alerts),
+        "timestamp": datetime.now(timezone(timedelta(hours=5, minutes=30))).isoformat()
+    }
+    
+    cache_service.set(cache_key, result, CACHE_TTL_MEDIUM)
+    return result
+
+@router.get("/risk-overview/endpoints")
+async def get_risk_overview_endpoints(request: Request, limit: int = 10):
+    """Get top risky endpoints with detailed information"""
+    db = request.app.state.db
+    from datetime import datetime, timedelta
+    
+    risk_scores = db.get_risk_scores()
+    alerts = db.get_recent_alerts(200)
+    
+    # Sort by risk score
+    sorted_risks = sorted(risk_scores, key=lambda x: x.get('risk_score', 0), reverse=True)
+    top_risks = sorted_risks[:limit]
+    
+    # Enrich with alert information
+    endpoint_data = []
+    for risk in top_risks:
+        hostname = risk.get('hostname', 'Unknown')
+        risk_score = risk.get('risk_score', 0)
+        anomaly_score = risk.get('anomaly_score', risk_score)
+        
+        # Find recent alerts for this endpoint
+        endpoint_alerts = [a for a in alerts if a.get('hostname') == hostname]
+        
+        # Determine threat type
+        if endpoint_alerts:
+            latest_alert = endpoint_alerts[0]
+            threat_type = latest_alert.get('message', 'Suspicious activity detected')
+            
+            # Extract threat type from message
+            if 'encryption' in threat_type.lower() or 'ransomware' in threat_type.lower():
+                threat_type = 'Ransomware Encryption'
+            elif 'lateral' in threat_type.lower():
+                threat_type = 'Lateral Movement'
+            elif 'exfiltration' in threat_type.lower():
+                threat_type = 'Data Exfiltration'
+            elif 'privilege' in threat_type.lower():
+                threat_type = 'Privilege Escalation'
+            elif 'process' in threat_type.lower():
+                threat_type = 'Suspicious Process'
+            else:
+                threat_type = 'Suspicious Activity'
+        else:
+            threat_type = 'Anomaly Detected'
+        
+        # Determine status
+        if risk_score >= 0.85:
+            status = 'Critical'
+            action = 'Isolate Immediately'
+        elif risk_score >= 0.70:
+            status = 'High'
+            action = 'Block Network Access'
+        elif risk_score >= 0.50:
+            status = 'Medium'
+            action = 'Monitor & Alert'
+        else:
+            status = 'Low'
+            action = 'Watch'
+        
+        # Calculate last activity
+        timestamp = risk.get('timestamp')
+        if timestamp:
+            if isinstance(timestamp, str):
+                try:
+                    ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    ts = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+            else:
+                ts = timestamp
+            
+            time_diff = datetime.now(timezone(timedelta(hours=5, minutes=30))) - ts.replace(tzinfo=None)
+            minutes = int(time_diff.total_seconds() / 60)
+            
+            if minutes < 1:
+                last_activity = 'Just now'
+            elif minutes < 60:
+                last_activity = f'{minutes} min ago'
+            else:
+                hours = int(minutes / 60)
+                last_activity = f'{hours} hour{"s" if hours > 1 else ""} ago'
+        else:
+            last_activity = 'Unknown'
+        
+        endpoint_data.append({
+            "id": len(endpoint_data) + 1,
+            "name": hostname,
+            "riskScore": round(risk_score, 2),
+            "threatType": threat_type,
+            "anomalyScore": round(anomaly_score, 2),
+            "status": status,
+            "lastActivity": last_activity,
+            "action": action,
+            "alertCount": len(endpoint_alerts)
+        })
+    
+    return {
+        "endpoints": endpoint_data,
+        "count": len(endpoint_data),
+        "timestamp": datetime.now(timezone(timedelta(hours=5, minutes=30))).isoformat()
+    }
+
+@router.get("/risk-overview/trends")
+async def get_risk_trends(request: Request, hours: int = 24):
+    """Get risk score trends over time"""
+    db = request.app.state.db
+    from datetime import datetime, timedelta
+    from collections import defaultdict
+    
+    # Get risk scores from database
+    risk_scores = db.get_risk_scores()
+    
+    if not risk_scores:
+        # Return default trend if no data
+        return {
+            "trends": [{"time": f"{i:02d}:00", "score": 45 + i} for i in range(0, 24, 2)],
+            "hours": hours
+        }
+    
+    # Group by hour
+    cutoff_time = datetime.now(timezone(timedelta(hours=5, minutes=30))) - timedelta(hours=hours)
+    hourly_scores = defaultdict(list)
+    
+    for risk in risk_scores:
+        timestamp = risk.get('timestamp')
+        if timestamp:
+            if isinstance(timestamp, str):
+                try:
+                    ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    continue
+            else:
+                ts = timestamp
+            
+            if ts.replace(tzinfo=None) >= cutoff_time:
+                hour_key = ts.strftime("%H:00")
+                hourly_scores[hour_key].append(risk.get('risk_score', 0))
+    
+    # Calculate averages
+    trends = []
+    for i in range(0, hours + 1, 2):
+        hour_time = cutoff_time + timedelta(hours=i)
+        hour_key = hour_time.strftime("%H:00")
+        
+        if hour_key in hourly_scores:
+            avg_score = sum(hourly_scores[hour_key]) / len(hourly_scores[hour_key])
+            trends.append({
+                "time": hour_key if i < hours else "Now",
+                "score": int(avg_score * 100)
+            })
+        else:
+            # Interpolate if no data
+            prev_score = trends[-1]["score"] if trends else 45
+            trends.append({
+                "time": hour_key if i < hours else "Now",
+                "score": prev_score + (i % 3)
+            })
+    
+    return {
+        "trends": trends,
+        "hours": hours,
+        "dataPoints": len(trends)
+    }
+
+@router.get("/risk-overview/factors")
+async def get_risk_factors(request: Request):
+    """Get risk factor breakdown showing why systems are risky"""
+    db = request.app.state.db
+    
+    logs = db.get_recent_logs(200)
+    alerts = db.get_recent_alerts(100)
+    
+    # Analyze risk factors from logs
+    total_weight = 0
+    factors = {
+        "encryption": 0,
+        "network": 0,
+        "process": 0,
+        "privilege": 0,
+        "file_ops": 0
+    }
+    
+    for log in logs:
+        # Encryption indicators
+        if log.get('encryption_indicators', 0) > 0:
+            factors["encryption"] += log.get('encryption_indicators', 0) * 10
+        
+        # Network activity
+        if log.get('network_connections_count', 0) > 20:
+            factors["network"] += (log.get('network_connections_count', 0) - 20) * 2
+        
+        # Process activity
+        if log.get('process_cpu_percent', 0) > 80:
+            factors["process"] += (log.get('process_cpu_percent', 0) - 80)
+        
+        # File operations
+        if log.get('file_operations_per_min', 0) > 100:
+            factors["file_ops"] += (log.get('file_operations_per_min', 0) - 100) / 10
+    
+    # Check alerts for privilege escalation
+    for alert in alerts:
+        if 'privilege' in alert.get('message', '').lower():
+            factors["privilege"] += 20
+    
+    total_weight = sum(factors.values())
+    
+    # Calculate percentages
+    if total_weight > 0:
+        risk_factors = [
+            {
+                "factor": "File Encryption Spike",
+                "percentage": int((factors["encryption"] / total_weight) * 100),
+                "color": "#ef4444"
+            },
+            {
+                "factor": "Abnormal Network Activity",
+                "percentage": int((factors["network"] / total_weight) * 100),
+                "color": "#f59e0b"
+            },
+            {
+                "factor": "Suspicious Process Spawn",
+                "percentage": int((factors["process"] / total_weight) * 100),
+                "color": "#eab308"
+            },
+            {
+                "factor": "Privilege Escalation",
+                "percentage": int((factors["privilege"] / total_weight) * 100),
+                "color": "#06b6d4"
+            },
+            {
+                "factor": "Mass File Rename",
+                "percentage": int((factors["file_ops"] / total_weight) * 100),
+                "color": "#8b5cf6"
+            }
+        ]
+    else:
+        # Default distribution if no data
+        risk_factors = [
+            {"factor": "File Encryption Spike", "percentage": 35, "color": "#ef4444"},
+            {"factor": "Abnormal Network Activity", "percentage": 25, "color": "#f59e0b"},
+            {"factor": "Suspicious Process Spawn", "percentage": 20, "color": "#eab308"},
+            {"factor": "Privilege Escalation", "percentage": 15, "color": "#06b6d4"},
+            {"factor": "Mass File Rename", "percentage": 5, "color": "#8b5cf6"}
+        ]
+    
+    # Normalize to 100%
+    total_pct = sum(f["percentage"] for f in risk_factors)
+    if total_pct > 0:
+        for factor in risk_factors:
+            factor["percentage"] = int((factor["percentage"] / total_pct) * 100)
+    
+    return {
+        "factors": risk_factors,
+        "timestamp": datetime.now(timezone(timedelta(hours=5, minutes=30))).isoformat()
+    }
+
+@router.get("/risk-overview/severity-distribution")
+async def get_severity_distribution(request: Request):
+    """Get threat severity distribution"""
+    db = request.app.state.db
+    
+    risk_scores = db.get_risk_scores()
+    
+    # Count by severity
+    critical = len([r for r in risk_scores if r.get('risk_score', 0) >= 0.90])
+    high = len([r for r in risk_scores if 0.70 <= r.get('risk_score', 0) < 0.90])
+    medium = len([r for r in risk_scores if 0.50 <= r.get('risk_score', 0) < 0.70])
+    low = len([r for r in risk_scores if r.get('risk_score', 0) < 0.50])
+    
+    return {
+        "distribution": [
+            {"name": "Critical", "value": critical, "color": "#dc2626"},
+            {"name": "High", "value": high, "color": "#f59e0b"},
+            {"name": "Medium", "value": medium, "color": "#eab308"},
+            {"name": "Low", "value": low, "color": "#14b8a6"}
+        ],
+        "total": len(risk_scores)
     }

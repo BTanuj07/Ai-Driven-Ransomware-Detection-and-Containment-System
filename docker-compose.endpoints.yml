@@ -1,0 +1,189 @@
+services:
+
+  # ── Workstations (10) ──────────────────────────────────────────
+  ws-01:
+    build: ./endpoint_agent
+    container_name: arcs-ws-01
+    environment:
+      HOSTNAME: WS-01
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-02:
+    build: ./endpoint_agent
+    container_name: arcs-ws-02
+    environment:
+      HOSTNAME: WS-02
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-03:
+    build: ./endpoint_agent
+    container_name: arcs-ws-03
+    environment:
+      HOSTNAME: WS-03
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-04:
+    build: ./endpoint_agent
+    container_name: arcs-ws-04
+    environment:
+      HOSTNAME: WS-04
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-05:
+    build: ./endpoint_agent
+    container_name: arcs-ws-05
+    environment:
+      HOSTNAME: WS-05
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-06:
+    build: ./endpoint_agent
+    container_name: arcs-ws-06
+    environment:
+      HOSTNAME: WS-06
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-07:
+    build: ./endpoint_agent
+    container_name: arcs-ws-07
+    environment:
+      HOSTNAME: WS-07
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-08:
+    build: ./endpoint_agent
+    container_name: arcs-ws-08
+    environment:
+      HOSTNAME: WS-08
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-09:
+    build: ./endpoint_agent
+    container_name: arcs-ws-09
+    environment:
+      HOSTNAME: WS-09
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  ws-10:
+    build: ./endpoint_agent
+    container_name: arcs-ws-10
+    environment:
+      HOSTNAME: WS-10
+      ENDPOINT_TYPE: workstation
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  # ── Servers (5) ────────────────────────────────────────────────
+  web-01:
+    build: ./endpoint_agent
+    container_name: arcs-web-01
+    environment:
+      HOSTNAME: WEB-01
+      ENDPOINT_TYPE: server
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  app-01:
+    build: ./endpoint_agent
+    container_name: arcs-app-01
+    environment:
+      HOSTNAME: APP-01
+      ENDPOINT_TYPE: server
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  file-01:
+    build: ./endpoint_agent
+    container_name: arcs-file-01
+    environment:
+      HOSTNAME: FILE-01
+      ENDPOINT_TYPE: server
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  mail-01:
+    build: ./endpoint_agent
+    container_name: arcs-mail-01
+    environment:
+      HOSTNAME: MAIL-01
+      ENDPOINT_TYPE: server
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  dns-01:
+    build: ./endpoint_agent
+    container_name: arcs-dns-01
+    environment:
+      HOSTNAME: DNS-01
+      ENDPOINT_TYPE: server
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  # ── Databases (3) ──────────────────────────────────────────────
+  db-01:
+    build: ./endpoint_agent
+    container_name: arcs-db-01
+    environment:
+      HOSTNAME: DB-01
+      ENDPOINT_TYPE: database
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  db-02:
+    build: ./endpoint_agent
+    container_name: arcs-db-02
+    environment:
+      HOSTNAME: DB-02
+      ENDPOINT_TYPE: database
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+  db-backup:
+    build: ./endpoint_agent
+    container_name: arcs-db-backup
+    environment:
+      HOSTNAME: DB-BACKUP
+      ENDPOINT_TYPE: database
+      KAFKA_BOOTSTRAP_SERVERS: arcs-kafka:29092
+    networks: [arcs-network]
+    restart: on-failure
+
+networks:
+  arcs-network:
+    external: true
+    name: major_arcs-network

@@ -1,3 +1,16 @@
+const formatIstTime = (value) => {
+  if (!value) return '--'
+  const hasTimezone = typeof value === 'string' && /([zZ]|[+-]\d{2}:\d{2})$/.test(value)
+  const date = value instanceof Date ? value : new Date(hasTimezone ? value : `${value}Z`)
+  return date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
+  })
+}
+
 const ContainmentPanel = ({ actions }) => {
   const getActionIcon = (action) => {
     if (action.includes('KILL_PROCESS')) return '🔪'
@@ -24,7 +37,7 @@ const ContainmentPanel = ({ actions }) => {
                   <span className="text-sm font-semibold text-slate-300">{action.hostname}</span>
                 </div>
                 <span className="text-xs text-slate-400">
-                  {new Date(action.timestamp).toLocaleTimeString()}
+                  {formatIstTime(action.timestamp)}
                 </span>
               </div>
               <p className="text-sm text-slate-300 ml-7">{action.action}</p>

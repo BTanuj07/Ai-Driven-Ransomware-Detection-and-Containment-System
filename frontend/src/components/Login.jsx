@@ -81,7 +81,15 @@ const Login = () => {
       <section className="signin-shell">
         <div className="signin-visual">
           <div className="signin-brand">
-            <div className="signin-brand-mark"><SignInIcon type="shield" /></div>
+            <div className="signin-brand-mark">
+              <img 
+                src="/arcs-brand.png" 
+                alt="ARCS Logo" 
+                style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '50%' }}
+                onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+              />
+              <div style={{ display: 'none' }}><SignInIcon type="shield" /></div>
+            </div>
             <div>
               <h1>ARCS</h1>
               <p>AI-Driven Ransomware Detection & Containment System</p>

@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { apiClient } from './lib/api'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
-import { PERMISSIONS } from './lib/supabase'
+import { PERMISSIONS, hasPermission } from './lib/supabase'
+import SettingsModule from './components/SettingsModule'
+import UsersModule from './components/UsersModule'
+import ReportsModule from './components/ReportsModule'
+import RiskOverview from './components/RiskOverview'
+import NetworkTopologyAdvanced from './components/NetworkTopologyAdvanced'
 import {
   Area,
   AreaChart,
@@ -25,22 +31,37 @@ const riskColors = {
 }
 
 const navItems = [
-  ['Dashboard', 'grid'],
-  ['Alerts', 'bell'],
-  ['Risk Overview', 'shield'],
-  ['Endpoints', 'monitor'],
-  ['Network Topology', 'nodes'],
-  ['Logs', 'log'],
-  ['Threat Hunting', 'search'],
-  ['Response Actions', 'bolt'],
-  ['Reports', 'report'],
-  ['Settings', 'gear'],
-  ['Users', 'user']
+  { name: 'Dashboard', icon: 'grid', path: '/', permission: PERMISSIONS.VIEW_DASHBOARD },
+  { name: 'Alerts', icon: 'bell', path: '/alerts', permission: PERMISSIONS.VIEW_ALERTS },
+  { name: 'Risk Overview', icon: 'shield', path: '/risk-overview', permission: PERMISSIONS.VIEW_RISK_OVERVIEW },
+  { name: 'Endpoints', icon: 'monitor', path: '/endpoints', permission: PERMISSIONS.VIEW_ENDPOINTS },
+  { name: 'Network Topology', icon: 'nodes', path: '/network-topology', permission: PERMISSIONS.VIEW_NETWORK_TOPOLOGY },
+  { name: 'Logs', icon: 'log', path: '/logs', permission: PERMISSIONS.VIEW_LOGS },
+  { name: 'Threat Hunting', icon: 'search', path: '/threat-hunting', permission: PERMISSIONS.THREAT_HUNTING },
+  { name: 'Response Actions', icon: 'bolt', path: '/response-actions', permission: PERMISSIONS.RESPONSE_ACTIONS_FULL },
+  { name: 'Reports', icon: 'report', path: '/reports', permission: PERMISSIONS.VIEW_REPORTS },
+  { name: 'Settings', icon: 'gear', path: '/settings', permission: PERMISSIONS.VIEW_SETTINGS },
+  { name: 'Users', icon: 'user', path: '/users', permission: PERMISSIONS.VIEW_USERS }
 ]
+
+const parseServerDate = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value !== 'string') return new Date(value)
+
+  const hasTimezone = /([zZ]|[+-]\d{2}:\d{2})$/.test(value)
+  return new Date(hasTimezone ? value : `${value}Z`)
+}
 
 const formatTime = (value) => {
   if (!value) return '--'
-  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return parseServerDate(value)?.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
+  }) || '--'
 }
 
 const getRiskLevel = (score = 0) => {
@@ -61,6 +82,7 @@ const Icon = ({ type }) => {
   const paths = {
     grid: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 6-3 9h18c0-3-3-2-3-9" /><path d="M10 21h4" /></>,
+    message: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M8 9h8M8 13h5" /></>,
     shield: <path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6l-7-3Z" />,
     monitor: <><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></>,
     nodes: <><circle cx="6" cy="7" r="3" /><circle cx="18" cy="7" r="3" /><circle cx="12" cy="18" r="3" /><path d="m8.5 9.3 2.3 5.1M15.5 9.3l-2.3 5.1" /></>,
@@ -69,6 +91,7 @@ const Icon = ({ type }) => {
     bolt: <path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z" />,
     report: <><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v5h4M9 13h6M9 17h6" /></>,
     gear: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.7-1L14.5 3h-5l-.3 3.1a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.3 3.1h5l.3-3.1a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1Z" /></>,
+    close: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
     user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c1.4-4 14.6-4 16 0" /></>
   }
 
@@ -81,7 +104,12 @@ const MetricCard = ({ title, value, trend, tone, icon }) => (
     <div>
       <p>{title}</p>
       <strong>{value}</strong>
-      <span>{trend}</span>
+      {trend ? (
+        <span className={`metric-trend ${trend.direction || 'neutral'}`}>
+          <i>{trend.direction === 'up' ? '▲' : trend.direction === 'down' ? '▼' : '•'}</i>
+          {trend.value} {trend.label}
+        </span>
+      ) : null}
     </div>
   </section>
 )
@@ -92,15 +120,19 @@ const EmptyState = ({ label }) => (
 
 function AppContent() {
   const { user, signOut, userRole } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  
   const [alerts, setAlerts] = useState([])
   const [riskScores, setRiskScores] = useState([])
   const [networkGraph, setNetworkGraph] = useState(null)
   const [stats, setStats] = useState(null)
   const [logs, setLogs] = useState([])
   const [containmentActions, setContainmentActions] = useState([])
+  const [containmentTotal, setContainmentTotal] = useState(0)
   
   // New state for additional features
-  const [activeSection, setActiveSection] = useState('Dashboard')
+  // Remove activeSection state - now using URL routing
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showSearchResults, setShowSearchResults] = useState(false)
@@ -110,28 +142,44 @@ function AppContent() {
   const [systemResources, setSystemResources] = useState(null)
   const [showAllAlerts, setShowAllAlerts] = useState(false)
   const [allAlerts, setAllAlerts] = useState([])
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false)
+  const [showMessagesPanel, setShowMessagesPanel] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   const fetchData = async () => {
     try {
-      const [alertsRes, scoresRes, graphRes, statsRes, logsRes, actionsRes, timelineRes, resourcesRes] = await Promise.all([
-        axios.get('/api/alerts?limit=20'),
-        axios.get('/api/risk-scores'),
-        axios.get('/api/network-graph'),
-        axios.get('/api/stats'),
-        axios.get('/api/logs?limit=50'),
-        axios.get('/api/containment-actions?limit=20'),
-        axios.get('/api/alerts/timeline?days=7'),
-        axios.get('/api/system-resources')
+      const [
+        alertsRes,
+        scoresRes,
+        graphRes,
+        statsRes,
+        logsRes,
+        actionsRes,
+        timelineRes,
+        resourcesRes
+      ] = await Promise.allSettled([
+        apiClient.get('/api/alerts?limit=20'),
+        apiClient.get('/api/risk-scores'),
+        apiClient.get('/api/network-graph'),
+        apiClient.get('/api/stats'),
+        apiClient.get('/api/logs?limit=50'),
+        apiClient.get('/api/containment-actions?limit=20'),
+        apiClient.get('/api/alerts/timeline?days=7'),
+        apiClient.get('/api/system-resources')
       ])
 
-      setAlerts(alertsRes.data.alerts || [])
-      setRiskScores(scoresRes.data.risk_scores || [])
-      setNetworkGraph(graphRes.data || null)
-      setStats(statsRes.data || null)
-      setLogs(logsRes.data.logs || [])
-      setContainmentActions(actionsRes.data.actions || [])
-      setAlertsTimeline(timelineRes.data.timeline || [])
-      setSystemResources(resourcesRes.data || null)
+      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || [])
+      if (scoresRes.status === 'fulfilled') setRiskScores(scoresRes.value.data.risk_scores || [])
+      if (graphRes.status === 'fulfilled') setNetworkGraph(graphRes.value.data || null)
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data || null)
+      if (logsRes.status === 'fulfilled') setLogs(logsRes.value.data.logs || [])
+      if (actionsRes.status === 'fulfilled') {
+        setContainmentActions(actionsRes.value.data.actions || [])
+        setContainmentTotal(actionsRes.value.data.total || actionsRes.value.data.actions?.length || 0)
+      }
+      if (timelineRes.status === 'fulfilled') setAlertsTimeline(timelineRes.value.data.timeline || [])
+      if (resourcesRes.status === 'fulfilled') setSystemResources(resourcesRes.value.data || null)
     } catch (error) {
       console.error('Error fetching data:', error)
     }
@@ -144,7 +192,7 @@ function AppContent() {
       return
     }
     try {
-      const res = await axios.get(`/api/search?query=${encodeURIComponent(query)}`)
+      const res = await apiClient.get(`/api/search?query=${encodeURIComponent(query)}`)
       setSearchResults(res.data.results || [])
       setShowSearchResults(true)
     } catch (error) {
@@ -154,7 +202,7 @@ function AppContent() {
 
   const fetchEndpoints = async () => {
     try {
-      const res = await axios.get('/api/endpoints')
+      const res = await apiClient.get('/api/endpoints')
       setEndpoints(res.data.endpoints || [])
     } catch (error) {
       console.error('Error fetching endpoints:', error)
@@ -163,7 +211,7 @@ function AppContent() {
 
   const fetchThreatHunting = async () => {
     try {
-      const res = await axios.get('/api/threat-hunting')
+      const res = await apiClient.get('/api/threat-hunting')
       setThreatPatterns(res.data.patterns || [])
     } catch (error) {
       console.error('Error fetching threat patterns:', error)
@@ -172,7 +220,7 @@ function AppContent() {
 
   const handleViewAllAlerts = async () => {
     try {
-      const res = await axios.get('/api/alerts?limit=100')
+      const res = await apiClient.get('/api/alerts?limit=100')
       setAllAlerts(res.data.alerts || [])
       setShowAllAlerts(true)
     } catch (error) {
@@ -182,7 +230,7 @@ function AppContent() {
 
   const handleAcknowledgeAlert = async (alertId) => {
     try {
-      await axios.post(`/api/alerts/${alertId}/acknowledge`)
+      await apiClient.post(`/api/alerts/${alertId}/acknowledge`)
       fetchData()
     } catch (error) {
       console.error('Error acknowledging alert:', error)
@@ -191,7 +239,7 @@ function AppContent() {
 
   const handleResolveAlert = async (alertId) => {
     try {
-      await axios.post(`/api/alerts/${alertId}/resolve`)
+      await apiClient.post(`/api/alerts/${alertId}/resolve`)
       fetchData()
     } catch (error) {
       console.error('Error resolving alert:', error)
@@ -205,12 +253,13 @@ function AppContent() {
   }, [])
 
   useEffect(() => {
-    if (activeSection === 'Endpoints') {
+    const path = location.pathname
+    if (path === '/endpoints') {
       fetchEndpoints()
-    } else if (activeSection === 'Threat Hunting') {
+    } else if (path === '/threat-hunting') {
       fetchThreatHunting()
     }
-  }, [activeSection])
+  }, [location.pathname])
 
   const totals = useMemo(() => {
     const high = stats?.high_risk_count || 0
@@ -266,20 +315,45 @@ function AppContent() {
   const recentAlerts = alerts.slice(0, 5)
   const recentActions = containmentActions.slice(0, 4)
   const latestLog = logs[0]
-  const now = new Date().toLocaleString([], {
+  const navItemsWithAccess = navItems.filter(item => hasPermission(userRole, item.permission))
+  const unreadMessages = Math.min(9, recentAlerts.filter(alert => (alert.risk_level || 'LOW') !== 'LOW').length + recentActions.length)
+  const quickSettings = [
+    ['Open Settings Workspace', 'Settings'],
+    ['Review Reports', 'Reports'],
+    ['Go to Alerts', 'Alerts'],
+    ['Open Response Actions', 'Response Actions']
+  ]
+  const dashboardMetricTrends = {
+    endpoints: null, // Remove mock trends - show real-time data only
+    high: null,
+    medium: null,
+    low: null,
+    contained: null
+  }
+  const now = new Date().toLocaleString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
   })
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark"><Icon type="shield" /></div>
+          <div className="brand-mark">
+            <img 
+              src="/arcs-brand.png" 
+              alt="ARCS Logo" 
+              style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '50%' }}
+              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+            />
+            <div style={{ display: 'none' }}><Icon type="shield" /></div>
+          </div>
           <div>
             <h1>ARCS</h1>
             <p>AI-Driven Ransomware Detection & Containment System</p>
@@ -287,16 +361,19 @@ function AppContent() {
         </div>
 
         <nav>
-          {navItems.map(([label, icon], index) => (
-            <button 
-              className={activeSection === label ? 'active' : ''} 
-              key={label}
-              onClick={() => setActiveSection(label)}
-            >
-              <Icon type={icon} />
-              <span>{label}</span>
-            </button>
-          ))}
+          {navItemsWithAccess
+            .map((item) => (
+              <button 
+                className={location.pathname === item.path ? 'active' : ''} 
+                key={item.name}
+                onClick={() => navigate(item.path)}
+                title={sidebarCollapsed ? item.name : undefined}
+              >
+                <Icon type={item.icon} />
+                <span>{item.name}</span>
+              </button>
+            ))
+          }
         </nav>
 
         <section className="system-status">
@@ -316,7 +393,13 @@ function AppContent() {
 
       <div className="workspace">
         <header className="topbar">
-          <button className="icon-button" aria-label="Menu"><span /></button>
+          <button
+            className={`icon-button menu-toggle ${sidebarCollapsed ? 'is-open' : ''}`}
+            aria-label="Menu"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            <span />
+          </button>
           <label className="search-box">
             <Icon type="search" />
             <input 
@@ -358,62 +441,202 @@ function AppContent() {
             )}
           </label>
           <div className="topbar-actions">
+            <button
+              className={`notification-button ${showMessagesPanel ? 'active' : ''}`}
+              aria-label="Messages"
+              onClick={() => {
+                setShowMessagesPanel(!showMessagesPanel)
+                setShowSettingsPanel(false)
+                setShowProfileMenu(false)
+              }}
+            >
+              <Icon type="message" />
+              <span>{unreadMessages}</span>
+            </button>
             <button className="notification-button" aria-label="Notifications">
               <Icon type="bell" />
               <span>{totals.high}</span>
             </button>
-            <button className="icon-button" aria-label="Settings"><Icon type="gear" /></button>
-            <div className="profile" style={{ position: 'relative' }}>
+            <button
+              className={`icon-button utility-icon ${showSettingsPanel ? 'active' : ''}`}
+              aria-label="Settings"
+              onClick={() => {
+                setShowSettingsPanel(!showSettingsPanel)
+                setShowMessagesPanel(false)
+                setShowProfileMenu(false)
+              }}
+            >
+              <Icon type="gear" />
+            </button>
+            <button
+              type="button"
+              className={`profile profile-button ${showProfileMenu ? 'active' : ''}`}
+              onClick={() => {
+                setShowProfileMenu(!showProfileMenu)
+                setShowMessagesPanel(false)
+                setShowSettingsPanel(false)
+              }}
+            >
               <div className="avatar"><Icon type="user" /></div>
               <div>
                 <strong>{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}</strong>
-                <p style={{ textTransform: 'capitalize' }}>{userRole || 'viewer'}</p>
-              </div>
-              <button 
-                onClick={() => signOut()}
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: '8px',
-                  padding: '8px 16px',
-                  background: '#ef4444',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: '#fff',
-                  fontSize: '13px',
+                <p style={{ 
+                  textTransform: 'capitalize', 
+                  color: userRole === 'superadmin' ? '#a855f7' : userRole === 'admin' ? '#ef4444' : userRole === 'analyst' ? '#f59e0b' : '#14b8a6',
                   fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  pointerEvents: 'none',
-                  transition: 'opacity 0.2s'
-                }}
-                className="logout-btn"
-              >
-                Sign Out
-              </button>
-            </div>
-            <style>{`
-              .profile:hover .logout-btn {
-                opacity: 1 !important;
-                pointer-events: auto !important;
-              }
-            `}</style>
+                  fontSize: '0.75rem',
+                  marginTop: '2px'
+                }}>
+                  {userRole || 'viewer'} ●
+                </p>
+              </div>
+            </button>
           </div>
         </header>
 
+        {showProfileMenu && (
+          <div className="topbar-popover profile-popover">
+            <div className="popover-header">
+              <div>
+                <h3>{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}</h3>
+                <p>{user?.email || 'Signed in user'}</p>
+              </div>
+              <button className="icon-button utility-icon" onClick={() => setShowProfileMenu(false)} aria-label="Close profile menu">
+                <Icon type="close" />
+              </button>
+            </div>
+
+            <button
+              className="profile-signout-button"
+              onClick={() => signOut()}
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
+
+        {showMessagesPanel && (
+          <div className="topbar-popover messages-panel">
+            <div className="popover-header">
+              <div>
+                <h3>Messages & Alerts</h3>
+                <p>Latest operational updates and escalations</p>
+              </div>
+              <button className="icon-button utility-icon" onClick={() => setShowMessagesPanel(false)} aria-label="Close messages">
+                <Icon type="close" />
+              </button>
+            </div>
+
+            <div className="popover-section">
+              <span className="popover-label">Recent alerts</span>
+              {recentAlerts.length ? recentAlerts.map((alert, index) => (
+                <button
+                  key={alert._id || index}
+                  className="popover-item"
+                  onClick={() => {
+                    navigate('/alerts')
+                    setShowMessagesPanel(false)
+                  }}
+                >
+                  <div className={`popover-pill ${(alert.risk_level || 'LOW').toLowerCase()}`}>{alert.risk_level || 'LOW'}</div>
+                  <div>
+                    <strong>{alert.hostname || 'Unknown endpoint'}</strong>
+                    <p>{alert.message || 'Suspicious activity detected'}</p>
+                  </div>
+                  <time>{formatTime(alert.timestamp)}</time>
+                </button>
+              )) : <EmptyState label="No recent alerts" />}
+            </div>
+
+            <div className="popover-section">
+              <span className="popover-label">Response queue</span>
+              {recentActions.length ? recentActions.map((action, index) => (
+                <button
+                  key={action._id || index}
+                  className="popover-item compact"
+                  onClick={() => {
+                    navigate('/response-actions')
+                    setShowMessagesPanel(false)
+                  }}
+                >
+                  <div className="popover-icon success"><Icon type="bolt" /></div>
+                  <div>
+                    <strong>{action.action?.split(':')[0] || 'Action logged'}</strong>
+                    <p>{action.hostname || 'Unknown endpoint'}</p>
+                  </div>
+                  <time>{formatTime(action.timestamp)}</time>
+                </button>
+              )) : <EmptyState label="No response actions" />}
+            </div>
+          </div>
+        )}
+
+        {showSettingsPanel && (
+          <div className="topbar-popover settings-popover">
+            <div className="popover-header">
+              <div>
+                <h3>Quick Settings</h3>
+                <p>Shortcuts and operator controls</p>
+              </div>
+              <button className="icon-button utility-icon" onClick={() => setShowSettingsPanel(false)} aria-label="Close settings">
+                <Icon type="close" />
+              </button>
+            </div>
+
+            <div className="settings-glance-grid">
+              <div className="glance-card">
+                <span>Role</span>
+                <strong>{userRole || 'viewer'}</strong>
+              </div>
+              <div className="glance-card">
+                <span>Monitored systems</span>
+                <strong>{totals.systems}</strong>
+              </div>
+              <div className="glance-card">
+                <span>High risk</span>
+                <strong>{totals.high}</strong>
+              </div>
+              <div className="glance-card">
+                <span>Contained</span>
+                <strong>{containmentTotal}</strong>
+              </div>
+            </div>
+
+            <div className="quick-nav-list">
+              {quickSettings.map(([label, section]) => {
+              const sectionPath = section.toLowerCase().replace(/ /g, '-')
+              return (
+                <button
+                  key={section}
+                  className="quick-nav-item"
+                  onClick={() => {
+                    navigate(`/${sectionPath}`)
+                    setShowSettingsPanel(false)
+                  }}
+                >
+                  <div>
+                    <strong>{label}</strong>
+                    <p>{section}</p>
+                  </div>
+                  <Icon type="report" />
+                </button>
+              )
+            })}
+            </div>
+          </div>
+        )}
+
         <main>
-          {activeSection === 'Dashboard' && (
+          {location.pathname === '/' && (
             <>
               <div className="timestamp">{now}</div>
 
               <section className="metrics-grid">
-                <MetricCard title="Total Endpoints" value={totals.systems || 0} trend="+ monitored live" tone="blue" icon="monitor" />
-                <MetricCard title="High Risk Alerts" value={totals.high} trend="critical priority" tone="red" icon="shield" />
-                <MetricCard title="Medium Risk Alerts" value={totals.medium} trend="requires review" tone="orange" icon="shield" />
-                <MetricCard title="Low Risk Alerts" value={totals.low} trend="monitoring" tone="teal" icon="shield" />
-                <MetricCard title="Contained Threats" value={containmentActions.length} trend="+ actions logged" tone="purple" icon="bolt" />
+                <MetricCard title="Total Endpoints" value={totals.systems || 0} trend={dashboardMetricTrends.endpoints} tone="blue" icon="monitor" />
+                <MetricCard title="High Risk Alerts" value={totals.high} trend={dashboardMetricTrends.high} tone="red" icon="shield" />
+                <MetricCard title="Medium Risk Alerts" value={totals.medium} trend={dashboardMetricTrends.medium} tone="orange" icon="shield" />
+                <MetricCard title="Low Risk Alerts" value={totals.low} trend={dashboardMetricTrends.low} tone="teal" icon="shield" />
+                <MetricCard title="Contained Threats" value={containmentTotal} trend={dashboardMetricTrends.contained} tone="purple" icon="bolt" />
               </section>
 
           <section className="dashboard-grid">
@@ -451,6 +674,12 @@ function AppContent() {
                   <span><i className="isolated" />Isolated</span>
                 </div>
               </div>
+              <div className="network-overview-strip">
+                <div><strong>{nodes.length}</strong><span>Active nodes</span></div>
+                <div><strong>{edges.length}</strong><span>Live links</span></div>
+                <div><strong>{networkGraph?.graph?.infected_count || 0}</strong><span>Infected</span></div>
+                <div><strong>{networkGraph?.graph?.at_risk_count || 0}</strong><span>At risk</span></div>
+              </div>
               <div className="topology-stage">
                 {nodes.length ? (
                   nodes.slice(0, 9).map((node, index) => {
@@ -470,16 +699,18 @@ function AppContent() {
             <article className="panel severity-panel">
               <h2>Alerts by Severity</h2>
               <div className="severity-content">
-                <ResponsiveContainer width="58%" height={190}>
-                  <PieChart>
-                    <Pie data={severityData} dataKey="value" innerRadius={54} outerRadius={82} paddingAngle={1}>
-                      {severityData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="severity-total">
-                  <strong>{totals.total}</strong>
-                  <span>Total</span>
+                <div className="severity-chart-wrap">
+                  <ResponsiveContainer width="100%" height={190}>
+                    <PieChart>
+                      <Pie data={severityData} dataKey="value" innerRadius={54} outerRadius={82} paddingAngle={1}>
+                        {severityData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="severity-total">
+                    <strong>{totals.total}</strong>
+                    <span>Total</span>
+                  </div>
                 </div>
                 <div className="severity-list">
                   {severityData.map((entry) => (
@@ -619,7 +850,7 @@ function AppContent() {
           </>
           )}
 
-          {activeSection === 'Endpoints' && (
+          {location.pathname === '/endpoints' && (
             <section className="endpoints-section">
               <div className="timestamp">{now}</div>
               <h1 style={{ fontSize: '32px', marginBottom: '24px', marginTop: '24px' }}>Monitored Endpoints</h1>
@@ -677,7 +908,7 @@ function AppContent() {
             </section>
           )}
 
-          {activeSection === 'Threat Hunting' && (
+          {location.pathname === '/threat-hunting' && (
             <section className="threat-hunting-section">
               <div className="timestamp">{now}</div>
               <h1 style={{ fontSize: '32px', marginBottom: '24px', marginTop: '24px' }}>Threat Hunting</h1>
@@ -736,7 +967,7 @@ function AppContent() {
             </section>
           )}
 
-          {activeSection === 'Alerts' && (
+          {location.pathname === '/alerts' && (
             <section className="alerts-section">
               <div className="timestamp">{now}</div>
               <h1 style={{ fontSize: '32px', marginBottom: '24px', marginTop: '24px' }}>All Alerts</h1>
@@ -814,7 +1045,7 @@ function AppContent() {
             </section>
           )}
 
-          {activeSection === 'Logs' && (
+          {location.pathname === '/logs' && (
             <section className="logs-section">
               <div className="timestamp">{now}</div>
               <h1 style={{ fontSize: '32px', marginBottom: '24px', marginTop: '24px' }}>System Logs</h1>
@@ -856,7 +1087,7 @@ function AppContent() {
             </section>
           )}
 
-          {activeSection === 'Response Actions' && (
+          {location.pathname === '/response-actions' && (
             <section className="response-section">
               <div className="timestamp">{now}</div>
               <h1 style={{ fontSize: '32px', marginBottom: '24px', marginTop: '24px' }}>Response Actions</h1>
@@ -890,6 +1121,36 @@ function AppContent() {
               </article>
             </section>
           )}
+
+          {location.pathname === '/risk-overview' && <RiskOverview />}
+
+          {location.pathname === '/reports' && <ReportsModule userRole={userRole} />}
+
+          {location.pathname === '/settings' && hasPermission(userRole, PERMISSIONS.VIEW_SETTINGS) && (
+            <SettingsModule userRole={userRole} />
+          )}
+
+          {location.pathname === '/settings' && !hasPermission(userRole, PERMISSIONS.VIEW_SETTINGS) && (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+              <h2 style={{ color: '#fff', marginBottom: '8px' }}>Access Denied</h2>
+              <p style={{ color: '#8fa0b6' }}>You don't have permission to access Settings.</p>
+            </div>
+          )}
+
+          {location.pathname === '/users' && hasPermission(userRole, PERMISSIONS.VIEW_USERS) && (
+            <UsersModule userRole={userRole} />
+          )}
+
+          {location.pathname === '/users' && !hasPermission(userRole, PERMISSIONS.VIEW_USERS) && (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+              <h2 style={{ color: '#fff', marginBottom: '8px' }}>Access Denied</h2>
+              <p style={{ color: '#8fa0b6' }}>You don't have permission to manage users.</p>
+            </div>
+          )}
+
+          {location.pathname === '/network-topology' && <NetworkTopologyAdvanced networkGraph={networkGraph} userRole={userRole} />}
 
           {showAllAlerts && (
             <div style={{

@@ -1,6 +1,13 @@
 from pymongo import MongoClient, DESCENDING
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
+
+# IST = UTC + 5:30
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def now_ist():
+    """Return current datetime in IST"""
+    return datetime.now(IST)
 from typing import List, Dict, Any, Optional
 from config import config
 
@@ -74,7 +81,7 @@ class DatabaseService:
         if not self.client:
             return "no-db"
         try:
-            log_data["timestamp"] = datetime.utcnow()
+            log_data["timestamp"] = now_ist()
             result = self.logs.insert_one(log_data)
             return str(result.inserted_id)
         except Exception as e:
@@ -87,7 +94,7 @@ class DatabaseService:
             print("⚠️ No database client - alert not saved")
             return "no-db"
         try:
-            alert_data["timestamp"] = datetime.utcnow()
+            alert_data["timestamp"] = now_ist()
             result = self.alerts.insert_one(alert_data)
             print(f"✅ Alert saved to database: {result.inserted_id}")
             return str(result.inserted_id)
@@ -100,7 +107,7 @@ class DatabaseService:
         if not self.client:
             return "no-db"
         try:
-            risk_data["timestamp"] = datetime.utcnow()
+            risk_data["timestamp"] = now_ist()
             result = self.risk_scores.insert_one(risk_data)
             return str(result.inserted_id)
         except Exception as e:
@@ -112,7 +119,7 @@ class DatabaseService:
         if not self.client:
             return
         try:
-            status_data["last_updated"] = datetime.utcnow()
+            status_data["last_updated"] = now_ist()
             self.system_status.update_one(
                 {"hostname": hostname},
                 {"$set": status_data},
@@ -126,13 +133,32 @@ class DatabaseService:
         if not self.client:
             return "no-db"
         try:
-            action_data["timestamp"] = datetime.utcnow()
+            action_data["timestamp"] = now_ist()
             result = self.containment_actions.insert_one(action_data)
             return str(result.inserted_id)
         except Exception as e:
             print(f"⚠️ Failed to insert containment action: {e}")
             return "error"
     
+    def get_alert_counts(self) -> Dict[str, int]:
+        """Get alert counts by risk level using aggregation (no limit)"""
+        if not self.client:
+            return {"HIGH": 0, "MEDIUM": 0, "LOW": 0, "total": 0}
+        try:
+            pipeline = [
+                {"$group": {"_id": "$risk_level", "count": {"$sum": 1}}}
+            ]
+            result = list(self.alerts.aggregate(pipeline))
+            counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+            for r in result:
+                if r["_id"] in counts:
+                    counts[r["_id"]] = r["count"]
+            counts["total"] = sum(counts.values())
+            return counts
+        except Exception as e:
+            print(f"⚠️ Failed to get alert counts: {e}")
+            return {"HIGH": 0, "MEDIUM": 0, "LOW": 0, "total": 0}
+
     def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent alerts"""
         if not self.client:
@@ -196,7 +222,7 @@ class DatabaseService:
             from bson import ObjectId
             update_data = {
                 "status": status,
-                "status_updated_at": datetime.utcnow()
+                "status_updated_at": now_ist()
             }
             if updated_by:
                 update_data["updated_by"] = updated_by
@@ -254,7 +280,7 @@ class DatabaseService:
         if not self.client:
             return "no-db"
         try:
-            notification_data["timestamp"] = datetime.utcnow()
+            notification_data["timestamp"] = now_ist()
             notification_data["read"] = False
             result = self.notifications.insert_one(notification_data)
             return str(result.inserted_id)
@@ -288,7 +314,7 @@ class DatabaseService:
             from bson import ObjectId
             result = self.notifications.update_one(
                 {"_id": ObjectId(notification_id)},
-                {"$set": {"read": True, "read_at": datetime.utcnow()}}
+                {"$set": {"read": True, "read_at": now_ist()}}
             )
             return result.modified_count > 0
         except Exception as e:
@@ -304,7 +330,7 @@ class DatabaseService:
                 "action": action,
                 "user": user,
                 "details": details,
-                "timestamp": datetime.utcnow()
+                "timestamp": now_ist()
             }
             result = self.audit_logs.insert_one(log_data)
             return str(result.inserted_id)
@@ -328,7 +354,7 @@ class DatabaseService:
         if not self.client:
             return "no-db"
         try:
-            report_data["generated_at"] = datetime.utcnow()
+            report_data["generated_at"] = now_ist()
             result = self.reports.insert_one(report_data)
             return str(result.inserted_id)
         except Exception as e:
@@ -362,7 +388,7 @@ class DatabaseService:
         if not self.client:
             return False
         try:
-            settings_data["updated_at"] = datetime.utcnow()
+            settings_data["updated_at"] = now_ist()
             result = self.settings.update_one(
                 {"type": "system"},
                 {"$set": settings_data},

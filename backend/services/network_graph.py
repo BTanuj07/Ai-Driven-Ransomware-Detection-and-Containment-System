@@ -117,3 +117,110 @@ class NetworkGraphService:
             for target in targets:
                 weight = random.uniform(0.3, 1.0)
                 self.add_connection(nodes[i], target, weight)
+    
+    def calculate_attack_propagation_path(self) -> List[str]:
+        """Calculate real attack propagation path using shortest paths"""
+        if not self.infected_nodes or len(self.graph.nodes()) == 0:
+            return []
+        
+        # Start from first infected node
+        infected_list = list(self.infected_nodes)
+        source = infected_list[0]
+        
+        # Find high-value targets (nodes with high centrality)
+        centrality = nx.betweenness_centrality(self.graph)
+        targets = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+        
+        # Calculate shortest path to most critical nodes
+        path = [source]
+        visited = {source}
+        
+        for target_node, _ in targets[:3]:
+            if target_node not in visited:
+                try:
+                    shortest = nx.shortest_path(self.graph, source, target_node)
+                    for node in shortest[1:]:  # Skip source
+                        if node not in visited:
+                            path.append(node)
+                            visited.add(node)
+                            source = node  # Continue from this node
+                            break
+                except nx.NetworkXNoPath:
+                    continue
+        
+        return path[:4]  # Return top 4 nodes in propagation path
+    
+    def calculate_blast_radius(self) -> Dict[str, Any]:
+        """Calculate real blast radius using graph algorithms"""
+        if not self.infected_nodes or len(self.graph.nodes()) == 0:
+            return {
+                "affected": 0,
+                "atRisk": 0,
+                "critical": 0,
+                "probability": 0
+            }
+        
+        affected = len(self.infected_nodes)
+        at_risk = len(self.at_risk_nodes)
+        
+        # Find critical assets (high centrality nodes)
+        centrality = nx.betweenness_centrality(self.graph)
+        critical_threshold = sorted(centrality.values(), reverse=True)[min(2, len(centrality)-1)] if centrality else 0
+        critical = sum(1 for node, cent in centrality.items() 
+                      if cent >= critical_threshold and node not in self.infected_nodes)
+        
+        # Calculate spread probability based on graph connectivity
+        if len(self.graph.nodes()) > 0:
+            connectivity = nx.average_node_connectivity(self.graph) if len(self.graph.nodes()) > 1 else 0
+            probability = min(100, int((affected / len(self.graph.nodes()) * 100) + (connectivity * 20)))
+        else:
+            probability = 0
+        
+        return {
+            "affected": affected,
+            "atRisk": at_risk,
+            "critical": critical,
+            "probability": probability
+        }
+    
+    def get_isolation_recommendations(self) -> List[Dict[str, str]]:
+        """Generate real isolation recommendations based on graph analysis"""
+        recommendations = []
+        
+        if not self.infected_nodes:
+            return recommendations
+        
+        # Recommend isolating infected nodes
+        recommendations.append({
+            "action": "Isolate infected nodes",
+            "priority": "CRITICAL",
+            "color": "#ef4444"
+        })
+        
+        # Check for lateral movement risk
+        if self.at_risk_nodes:
+            recommendations.append({
+                "action": "Block SMB lateral movement",
+                "priority": "HIGH",
+                "color": "#f59e0b"
+            })
+        
+        # Check for privilege escalation risk
+        centrality = nx.betweenness_centrality(self.graph)
+        high_value_at_risk = any(centrality.get(node, 0) > 0.5 for node in self.at_risk_nodes)
+        
+        if high_value_at_risk:
+            recommendations.append({
+                "action": "Disable admin privilege spread",
+                "priority": "HIGH",
+                "color": "#f59e0b"
+            })
+        
+        # Always recommend enhanced monitoring
+        recommendations.append({
+            "action": "Enable enhanced monitoring",
+            "priority": "MEDIUM",
+            "color": "#0ea5e9"
+        })
+        
+        return recommendations

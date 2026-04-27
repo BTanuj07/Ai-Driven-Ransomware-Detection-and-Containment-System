@@ -1,5 +1,18 @@
 import { useState } from 'react'
 
+const formatIstTime = (value) => {
+  if (!value) return '--'
+  const hasTimezone = typeof value === 'string' && /([zZ]|[+-]\d{2}:\d{2})$/.test(value)
+  const date = value instanceof Date ? value : new Date(hasTimezone ? value : `${value}Z`)
+  return date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
+  })
+}
+
 const AlertsPanel = ({ alerts }) => {
   const getRiskColor = (level) => {
     switch (level) {
@@ -38,7 +51,7 @@ const AlertsPanel = ({ alerts }) => {
                   <span className="text-sm text-slate-300">{alert.hostname}</span>
                 </div>
                 <span className="text-xs text-slate-400">
-                  {new Date(alert.timestamp).toLocaleTimeString()}
+                  {formatIstTime(alert.timestamp)}
                 </span>
               </div>
               <p className="text-sm text-slate-300 mb-2">{alert.message}</p>
