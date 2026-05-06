@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
+import { supabase } from '../lib/supabase'
 
 const NetworkTopologyAdvanced = ({ networkGraph = {} }) => {
   const [selectedNode, setSelectedNode] = useState(null)
@@ -29,7 +30,7 @@ const NetworkTopologyAdvanced = ({ networkGraph = {} }) => {
         setLoading(true)
         
         // Get token from Supabase session
-        const { data: { session } } = await window.supabase?.auth.getSession() || { data: { session: null } }
+        const { data: { session } } = await supabase.auth.getSession()
         const token = session?.access_token
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
 

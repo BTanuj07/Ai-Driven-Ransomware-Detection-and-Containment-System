@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
+import { supabase } from '../lib/supabase'
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function RiskOverview() {
@@ -34,12 +35,24 @@ export default function RiskOverview() {
       setLoading(true)
       setError(null)
 
+      // Get authentication token
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        setError('Authentication required. Please log in.')
+        setLoading(false)
+        return
+      }
+      
+      const headers = { Authorization: `Bearer ${token}` }
+
       const [statsRes, endpointsRes, trendsRes, factorsRes, severityRes] = await Promise.all([
-        apiClient.get('/api/risk-overview/stats'),
-        apiClient.get('/api/risk-overview/endpoints?limit=10'),
-        apiClient.get('/api/risk-overview/trends?hours=24'),
-        apiClient.get('/api/risk-overview/factors'),
-        apiClient.get('/api/risk-overview/severity-distribution')
+        apiClient.get('/api/risk-overview/stats', { headers }),
+        apiClient.get('/api/risk-overview/endpoints?limit=10', { headers }),
+        apiClient.get('/api/risk-overview/trends?hours=24', { headers }),
+        apiClient.get('/api/risk-overview/factors', { headers }),
+        apiClient.get('/api/risk-overview/severity-distribution', { headers })
       ])
 
       setRiskData(statsRes.data)
@@ -51,7 +64,13 @@ export default function RiskOverview() {
       setLoading(false)
     } catch (err) {
       console.error('Error fetching risk overview data:', err)
-      setError('Failed to load risk data. Make sure the backend is running.')
+      if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.')
+      } else if (err.response?.status === 500) {
+        setError('Server error. Please check backend logs.')
+      } else {
+        setError('Failed to load risk data. Make sure the backend is running.')
+      }
       setLoading(false)
     }
   }

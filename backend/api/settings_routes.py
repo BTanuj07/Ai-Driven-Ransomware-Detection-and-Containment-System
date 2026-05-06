@@ -1,11 +1,12 @@
 """
-Settings API Routes - MongoDB Persistence
+Settings API Routes - MongoDB Persistence with Real-time Updates
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from typing import Dict, Any
 from pydantic import BaseModel
 from middleware.auth import require_auth, require_superadmin
+from services.settings_manager import settings_manager
 
 router = APIRouter()
 
@@ -43,7 +44,7 @@ async def update_settings(
     settings: SettingsUpdate,
     user: dict = Depends(require_superadmin)
 ):
-    """Update system settings (superadmin only)"""
+    """Update system settings (superadmin only) - applies immediately"""
     db = request.app.state.db
     
     # Convert to dict and remove None values
@@ -55,6 +56,9 @@ async def update_settings(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update settings")
     
+    # Update settings manager for real-time effect
+    settings_manager.update(settings_dict)
+    
     # Log the change
     db.insert_audit_log(
         action="UPDATE_SETTINGS",
@@ -62,9 +66,11 @@ async def update_settings(
         details=settings_dict
     )
     
+    print(f"✅ Settings updated by {user.get('email')}: {list(settings_dict.keys())}")
+    
     return {
         "status": "success",
-        "message": "Settings updated successfully",
+        "message": "Settings updated and applied immediately",
         "settings": db.get_settings()
     }
 

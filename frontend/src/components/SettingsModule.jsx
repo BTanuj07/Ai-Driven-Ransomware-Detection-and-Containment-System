@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
+import { supabase } from '../lib/supabase'
 
 const Icon = ({ type }) => {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', width: '20px', height: '20px' }
@@ -54,7 +55,7 @@ const SettingsModule = () => {
         setLoading(true)
         
         // Get token from Supabase session
-        const { data: { session } } = await window.supabase?.auth.getSession() || { data: { session: null } }
+        const { data: { session } } = await supabase.auth.getSession()
         const token = session?.access_token
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
@@ -105,7 +106,7 @@ const SettingsModule = () => {
     
     try {
       // Get token from Supabase session
-      const { data: { session } } = await window.supabase?.auth.getSession() || { data: { session: null } }
+      const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
 

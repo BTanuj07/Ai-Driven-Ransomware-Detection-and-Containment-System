@@ -13,6 +13,7 @@ from api.users_routes import router as users_router
 from services.auth import UserService
 from services.database import DatabaseService
 from services.kafka_consumer import KafkaConsumerService
+from services.settings_manager import settings_manager
 
 # Global services
 kafka_consumer_service = None
@@ -27,6 +28,10 @@ async def lifespan(app: FastAPI):
 
     db_service = DatabaseService()
     app.state.db = db_service
+
+    # Initialize settings manager with database
+    settings_manager.set_database(db_service)
+    print("Settings manager initialized")
 
     user_service = UserService(db_service)
     app.state.user_service = user_service

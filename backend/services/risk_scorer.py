@@ -1,5 +1,5 @@
 from typing import Dict, Any, Tuple
-from config import config
+from services.settings_manager import settings_manager
 
 class RiskScorer:
     """Calculate risk scores based on multiple factors"""
@@ -50,12 +50,19 @@ class RiskScorer:
         # Normalize score to 0-1 range
         risk_score = min(risk_score, 1.0)
         
-        # Determine risk level
-        if risk_score >= config.RISK_THRESHOLDS["HIGH"]:
+        # Get thresholds from settings manager (real-time)
+        high_threshold = settings_manager.high_risk_threshold
+        medium_threshold = settings_manager.medium_risk_threshold
+        low_threshold = settings_manager.low_risk_threshold
+        
+        # Determine risk level using dynamic thresholds
+        if risk_score >= high_threshold:
             risk_level = "HIGH"
-        elif risk_score >= config.RISK_THRESHOLDS["MEDIUM"]:
+        elif risk_score >= medium_threshold:
             risk_level = "MEDIUM"
-        else:
+        elif risk_score >= low_threshold:
             risk_level = "LOW"
+        else:
+            risk_level = "LOW"  # Default to LOW for very low scores
         
         return risk_level, risk_score

@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from datetime import datetime
 from services.database import DatabaseService
+from services.settings_manager import settings_manager
 
 class ResponseEngine:
     """Automated Security Orchestration and Response (SOAR)"""
@@ -15,16 +16,21 @@ class ResponseEngine:
         details: Dict[str, Any]
     ) -> List[str]:
         """
-        Execute automated containment actions
+        Execute automated containment actions based on settings
         Returns list of actions taken
         """
         actions_taken = []
         
+        # Check if approval is required
+        if settings_manager.require_approval:
+            print(f"⏸️ Containment for {hostname} requires admin approval")
+            return ["PENDING_APPROVAL: Awaiting admin authorization"]
+        
         print(f"🛡️ Executing containment for {hostname} (Risk: {risk_level})")
         
         if risk_level == "HIGH":
-            # Action 1: Kill malicious process
-            if "process_id" in details:
+            # Action 1: Kill malicious process (if enabled)
+            if settings_manager.auto_kill_process and "process_id" in details:
                 action = self._kill_process(hostname, details["process_id"])
                 actions_taken.append(action)
             
@@ -34,18 +40,19 @@ class ResponseEngine:
                     action = self._block_ip(hostname, ip)
                     actions_taken.append(action)
             
-            # Action 3: Isolate machine
-            action = self._isolate_machine(hostname)
-            actions_taken.append(action)
+            # Action 3: Isolate machine (if enabled)
+            if settings_manager.auto_isolate:
+                action = self._isolate_machine(hostname)
+                actions_taken.append(action)
             
-            # Action 4: Disable user account
-            if "username" in details:
+            # Action 4: Disable user account (if enabled)
+            if settings_manager.auto_disable_user and "username" in details:
                 action = self._disable_user(hostname, details["username"])
                 actions_taken.append(action)
         
         elif risk_level == "MEDIUM":
             # Less aggressive actions for medium risk
-            if "process_id" in details:
+            if settings_manager.auto_kill_process and "process_id" in details:
                 action = self._kill_process(hostname, details["process_id"])
                 actions_taken.append(action)
         

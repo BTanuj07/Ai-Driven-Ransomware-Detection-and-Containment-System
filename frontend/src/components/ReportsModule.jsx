@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { apiClient } from '../lib/api'
+import { supabase } from '../lib/supabase'
 
 const Icon = ({ type }) => {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', width: '20px', height: '20px' }
@@ -33,9 +34,16 @@ const ReportsModule = () => {
         setLoading(true)
         
         // Get token from Supabase session
-        const { data: { session } } = await window.supabase?.auth.getSession() || { data: { session: null } }
+        const { data: { session } } = await supabase.auth.getSession()
         const token = session?.access_token
-        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        
+        if (!token) {
+          console.error('No authentication token available')
+          setLoading(false)
+          return
+        }
+        
+        const headers = { Authorization: `Bearer ${token}` }
 
         const [summaryRes, trendRes, attackTypesRes, incidentsRes] = await Promise.all([
           apiClient.get('/api/reports/summary', { headers }),
@@ -50,6 +58,9 @@ const ReportsModule = () => {
         setIncidents(incidentsRes.data.incidents || [])
       } catch (error) {
         console.error('Failed to fetch reports data:', error)
+        if (error.response?.status === 401) {
+          console.error('Authentication failed - please log in again')
+        }
       } finally {
         setLoading(false)
       }
@@ -61,9 +72,15 @@ const ReportsModule = () => {
   const handleExport = async (format) => {
     try {
       // Get token from Supabase session
-      const { data: { session } } = await window.supabase?.auth.getSession() || { data: { session: null } }
+      const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      
+      if (!token) {
+        alert('Authentication required. Please log in again.')
+        return
+      }
+      
+      const headers = { Authorization: `Bearer ${token}` }
       
       await apiClient.post(`/api/reports/export?format=${format}`, {}, { headers })
       alert(`Report export initiated in ${format.toUpperCase()} format`)

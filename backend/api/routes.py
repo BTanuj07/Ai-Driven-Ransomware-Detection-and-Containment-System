@@ -6,6 +6,9 @@ from services.cache_service import cache_service
 
 router = APIRouter()
 
+# IST timezone (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
+
 # Cache TTL settings (in seconds)
 CACHE_TTL_SHORT = 3   # For frequently changing data (alerts, logs)
 CACHE_TTL_MEDIUM = 10  # For moderately changing data (stats, endpoints)
@@ -585,11 +588,11 @@ async def get_risk_overview_endpoints(request: Request, limit: int = 10):
                 try:
                     ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                 except:
-                    ts = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+                    ts = datetime.now(IST)
             else:
                 ts = timestamp
             
-            time_diff = datetime.now(timezone(timedelta(hours=5, minutes=30))) - ts.replace(tzinfo=None)
+            time_diff = datetime.now(IST) - ts.replace(tzinfo=None)
             minutes = int(time_diff.total_seconds() / 60)
             
             if minutes < 1:
@@ -617,7 +620,7 @@ async def get_risk_overview_endpoints(request: Request, limit: int = 10):
     return {
         "endpoints": endpoint_data,
         "count": len(endpoint_data),
-        "timestamp": datetime.now(timezone(timedelta(hours=5, minutes=30))).isoformat()
+        "timestamp": datetime.now(IST).isoformat()
     }
 
 @router.get("/risk-overview/trends")
@@ -638,7 +641,7 @@ async def get_risk_trends(request: Request, hours: int = 24):
         }
     
     # Group by hour
-    cutoff_time = datetime.now(timezone(timedelta(hours=5, minutes=30))) - timedelta(hours=hours)
+    cutoff_time = datetime.now(IST) - timedelta(hours=hours)
     hourly_scores = defaultdict(list)
     
     for risk in risk_scores:
