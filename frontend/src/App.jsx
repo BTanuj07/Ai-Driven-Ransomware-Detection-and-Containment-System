@@ -149,39 +149,52 @@ function AppContent() {
 
   const fetchData = async () => {
     try {
+      // Only fetch essential data for dashboard
       const [
         alertsRes,
-        scoresRes,
-        graphRes,
         statsRes,
-        logsRes,
-        actionsRes,
-        timelineRes,
-        resourcesRes
+        actionsRes
       ] = await Promise.allSettled([
         apiClient.get('/api/alerts?limit=20'),
-        apiClient.get('/api/risk-scores'),
-        apiClient.get('/api/network-graph'),
         apiClient.get('/api/stats'),
-        apiClient.get('/api/logs?limit=50'),
-        apiClient.get('/api/containment-actions?limit=20'),
-        apiClient.get('/api/alerts/timeline?days=7'),
-        apiClient.get('/api/system-resources')
+        apiClient.get('/api/containment-actions?limit=20')
       ])
 
       if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || [])
-      if (scoresRes.status === 'fulfilled') setRiskScores(scoresRes.value.data.risk_scores || [])
-      if (graphRes.status === 'fulfilled') setNetworkGraph(graphRes.value.data || null)
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data || null)
-      if (logsRes.status === 'fulfilled') setLogs(logsRes.value.data.logs || [])
       if (actionsRes.status === 'fulfilled') {
         setContainmentActions(actionsRes.value.data.actions || [])
         setContainmentTotal(actionsRes.value.data.total || actionsRes.value.data.actions?.length || 0)
       }
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    }
+  }
+
+  const fetchDetailedData = async () => {
+    try {
+      // Fetch additional data only when needed
+      const [
+        scoresRes,
+        graphRes,
+        logsRes,
+        timelineRes,
+        resourcesRes
+      ] = await Promise.allSettled([
+        apiClient.get('/api/risk-scores'),
+        apiClient.get('/api/network-graph'),
+        apiClient.get('/api/logs?limit=50'),
+        apiClient.get('/api/alerts/timeline?days=7'),
+        apiClient.get('/api/system-resources')
+      ])
+
+      if (scoresRes.status === 'fulfilled') setRiskScores(scoresRes.value.data.risk_scores || [])
+      if (graphRes.status === 'fulfilled') setNetworkGraph(graphRes.value.data || null)
+      if (logsRes.status === 'fulfilled') setLogs(logsRes.value.data.logs || [])
       if (timelineRes.status === 'fulfilled') setAlertsTimeline(timelineRes.value.data.timeline || [])
       if (resourcesRes.status === 'fulfilled') setSystemResources(resourcesRes.value.data || null)
     } catch (error) {
-      console.error('Error fetching data:', error)
+      console.error('Error fetching detailed data:', error)
     }
   }
 
@@ -247,9 +260,22 @@ function AppContent() {
   }
 
   useEffect(() => {
+    // Initial load - fetch essential data
     fetchData()
+    
+    // Fetch detailed data after a short delay
+    setTimeout(fetchDetailedData, 1000)
+    
+    // Auto-refresh only essential data every 5 seconds
     const interval = setInterval(fetchData, 5000)
-    return () => clearInterval(interval)
+    
+    // Refresh detailed data less frequently (every 30 seconds)
+    const detailedInterval = setInterval(fetchDetailedData, 30000)
+    
+    return () => {
+      clearInterval(interval)
+      clearInterval(detailedInterval)
+    }
   }, [])
 
   useEffect(() => {

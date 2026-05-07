@@ -12,11 +12,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class EmailAlertService:
-    def __init__(self):
+    def __init__(self, settings_manager=None):
         self.api_key = os.getenv('SENDGRID_API_KEY')
         self.from_email = os.getenv('ALERT_FROM_EMAIL', 'alerts@arcs-security.com')
-        self.admin_email = os.getenv('ADMIN_EMAIL')
         self.sg = sendgrid.SendGridAPIClient(api_key=self.api_key) if self.api_key else None
+        self.settings_manager = settings_manager
         
         # Track sent alerts to prevent duplicates
         self.sent_alerts: Dict[str, datetime] = {}
@@ -25,6 +25,14 @@ class EmailAlertService:
         # Critical alert thresholds
         self.critical_threshold = 0.85  # Risk score threshold for email alerts
         self.critical_keywords = ['ransomware', 'encryption', 'mass_deletion', 'lateral_movement']
+    
+    def _get_admin_email(self) -> str:
+        """Get admin email from settings manager or fallback to env"""
+        if self.settings_manager:
+            email = self.settings_manager.get('emailAddress')
+            if email and email != 'admin@arcs.local':
+                return email
+        return os.getenv('ADMIN_EMAIL', 'admin@arcs.local')
         
     def _is_critical_alert(self, alert: Dict) -> bool:
         """
@@ -176,8 +184,11 @@ class EmailAlertService:
         Returns True if email was sent, False otherwise
         """
         try:
+            # Get admin email dynamically from settings
+            admin_email = self._get_admin_email()
+            
             # Check if SendGrid is configured
-            if not self.sg or not self.api_key or not self.admin_email:
+            if not self.sg or not self.api_key or not admin_email:
                 logger.warning("Email service not configured - missing credentials")
                 return False
             
@@ -194,7 +205,7 @@ class EmailAlertService:
             
             message = Mail(
                 from_email=Email(self.from_email),
-                to_emails=To(self.admin_email),
+                to_emails=To(admin_email),
                 subject=subject,
                 html_content=Content("text/html", html_content)
             )
@@ -222,6 +233,9 @@ class EmailAlertService:
         Send daily summary email (optional feature)
         """
         try:
+            # Get admin email dynamically from settings
+            admin_email = self._get_admin_email()
+            
             subject = f"ARCS Daily Security Summary - {datetime.now().strftime('%Y-%m-%d')}"
             
             html_content = f"""
@@ -240,7 +254,7 @@ class EmailAlertService:
             
             message = Mail(
                 from_email=Email(self.from_email),
-                to_emails=To(self.admin_email),
+                to_emails=To(admin_email),
                 subject=subject,
                 html_content=Content("text/html", html_content)
             )
@@ -253,5 +267,5 @@ class EmailAlertService:
             return False
 
 
-# Global instance
-email_service = EmailAlertService()
+# Note: Create instances with settings_manager when needed
+# Example: email_service = EmailAlertService(settings_manager)

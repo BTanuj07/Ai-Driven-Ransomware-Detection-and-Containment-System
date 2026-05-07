@@ -7,8 +7,9 @@ from services.database import DatabaseService
 from ml_engine.detector import AnomalyDetector
 from services.risk_scorer import RiskScorer
 from services.response_engine import ResponseEngine
-from services.email_alerts import email_service
-from services.sms_alerts import sms_service
+from services.email_alerts import EmailAlertService
+from services.sms_alerts import SMSAlertService
+from services.settings_manager import settings_manager
 
 class KafkaConsumerService:
     def __init__(self, db_service: DatabaseService):
@@ -16,6 +17,11 @@ class KafkaConsumerService:
         self.detector = AnomalyDetector()
         self.risk_scorer = RiskScorer()
         self.response_engine = ResponseEngine(db_service)
+        
+        # Initialize alert services with settings manager
+        self.email_service = EmailAlertService(settings_manager)
+        self.sms_service = SMSAlertService(settings_manager)
+        
         self.running = False
         self.consumer = None
     
@@ -129,13 +135,13 @@ class KafkaConsumerService:
                 
                 # Send email for critical alerts
                 if risk_level in ["HIGH", "CRITICAL"] or risk_score >= 0.85:
-                    email_sent = email_service.send_critical_alert(alert)
+                    email_sent = self.email_service.send_critical_alert(alert)
                     if email_sent:
                         print(f"📧 Critical alert email sent for {message.get('hostname')}")
                 
                 # Send SMS for ultra-critical alerts (risk >= 0.90)
                 if risk_score >= 0.90 or (risk_level == "CRITICAL" and "ransomware" in alert.get("attack_type", "").lower()):
-                    sms_sent = sms_service.send_critical_sms(alert)
+                    sms_sent = self.sms_service.send_critical_sms(alert)
                     if sms_sent:
                         print(f"📱 Ultra-critical SMS alert sent for {message.get('hostname')}")
                 

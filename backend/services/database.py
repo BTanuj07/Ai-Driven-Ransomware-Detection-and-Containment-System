@@ -389,11 +389,13 @@ class DatabaseService:
             return False
         try:
             settings_data["updated_at"] = now_ist()
+            settings_data["type"] = "system"  # Ensure type field is set
             result = self.settings.update_one(
                 {"type": "system"},
                 {"$set": settings_data},
                 upsert=True
             )
+            print(f"✅ Settings updated in MongoDB: {list(settings_data.keys())}")
             return True
         except Exception as e:
             print(f"⚠️ Failed to update settings: {e}")

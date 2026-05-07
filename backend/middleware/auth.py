@@ -1,6 +1,7 @@
 """
 JWT Authentication Middleware
 Protects API endpoints with token validation
+Supports both custom JWT and Supabase JWT tokens
 """
 
 from fastapi import Request, HTTPException, status
@@ -14,6 +15,15 @@ from datetime import datetime, timedelta
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
+# Supabase Configuration
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+
+# Log configuration on startup
+if SUPABASE_JWT_SECRET:
+    print(f"✅ Supabase JWT validation enabled")
+else:
+    print(f"⚠️  Supabase JWT validation disabled - SUPABASE_JWT_SECRET not set")
 
 security = HTTPBearer()
 
@@ -34,20 +44,56 @@ class AuthMiddleware:
     
     @staticmethod
     def verify_token(token: str) -> dict:
-        """Verify and decode JWT token"""
+        """Verify and decode JWT token (supports both custom and Supabase tokens)"""
+        # Try custom JWT first
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            print(f"✅ Custom JWT token validated")
             return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has expired"
-            )
-        except jwt.InvalidTokenError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
+            print(f"⚠️ Custom JWT validation failed: {e}")
+        
+        # Try Supabase JWT
+        if SUPABASE_JWT_SECRET:
+            print(f"🔑 Trying Supabase JWT validation...")
+            try:
+                payload = jwt.decode(
+                    token, 
+                    SUPABASE_JWT_SECRET, 
+                    algorithms=["HS256"],
+                    options={"verify_aud": False}  # Supabase tokens don't always have aud
+                )
+                
+                # Extract email from Supabase token
+                email = payload.get('email') or payload.get('user_metadata', {}).get('email')
+                print(f"📧 Email from Supabase token: {email}")
+                
+                # Get user role from database based on email
+                from services.database import DatabaseService
+                db = DatabaseService()
+                user = db.users.find_one({"email": email})
+                
+                role = user.get('role', 'viewer') if user else 'viewer'
+                print(f"👤 User role from MongoDB: {role}")
+                
+                # Return normalized payload
+                return {
+                    "user_id": payload.get('sub'),
+                    "email": email,
+                    "role": role,
+                    "exp": payload.get('exp'),
+                    "iat": payload.get('iat')
+                }
+            except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
+                print(f"⚠️ Supabase token validation failed: {e}")
+        else:
+            print(f"❌ SUPABASE_JWT_SECRET not configured")
+        
+        # If both fail, raise error
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
     
     @staticmethod
     async def get_current_user(request: Request) -> dict:

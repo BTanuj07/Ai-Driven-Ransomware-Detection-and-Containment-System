@@ -11,11 +11,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SMSAlertService:
-    def __init__(self):
+    def __init__(self, settings_manager=None):
         self.account_sid = os.getenv('TWILIO_ACCOUNT_SID')
         self.auth_token = os.getenv('TWILIO_AUTH_TOKEN')
         self.from_phone = os.getenv('TWILIO_PHONE_NUMBER')
-        self.admin_phone = os.getenv('ADMIN_PHONE_NUMBER')
+        self.settings_manager = settings_manager
         
         try:
             self.client = Client(self.account_sid, self.auth_token) if self.account_sid and self.auth_token else None
@@ -34,6 +34,14 @@ class SMSAlertService:
         # Ultra-critical threshold (higher than email threshold)
         self.ultra_critical_threshold = 0.90  # Only send SMS for 90%+ risk
         self.ultra_critical_keywords = ['ransomware', 'encryption', 'mass_deletion']
+    
+    def _get_admin_phone(self) -> str:
+        """Get admin phone from settings manager or fallback to env"""
+        if self.settings_manager:
+            phone = self.settings_manager.get('phoneNumber')
+            if phone and phone != '+1 (555) 123-4567':
+                return phone
+        return os.getenv('ADMIN_PHONE_NUMBER', '+1 (555) 123-4567')
         
     def _is_ultra_critical(self, alert: Dict) -> bool:
         """
@@ -121,6 +129,9 @@ class SMSAlertService:
             if not self._should_send_sms(alert):
                 return False
             
+            # Get admin phone dynamically from settings
+            admin_phone = self._get_admin_phone()
+            
             # Cleanup old records
             self._cleanup_old_sms()
             
@@ -131,7 +142,7 @@ class SMSAlertService:
             message = self.client.messages.create(
                 body=message_body,
                 from_=self.from_phone,
-                to=self.admin_phone
+                to=admin_phone
             )
             
             if message.sid:
@@ -158,7 +169,8 @@ class SMSAlertService:
                 logger.error("Twilio client not initialized")
                 return False
             
-            target_phone = phone_number or self.admin_phone
+            # Use provided phone or get from settings
+            target_phone = phone_number or self._get_admin_phone()
             
             message = self.client.messages.create(
                 body="🔔 ARCS Test Alert\nThis is a test message from your ransomware detection system. SMS alerts are working correctly!",
@@ -174,5 +186,5 @@ class SMSAlertService:
             return False
 
 
-# Global instance
-sms_service = SMSAlertService()
+# Note: Create instances with settings_manager when needed
+# Example: sms_service = SMSAlertService(settings_manager)

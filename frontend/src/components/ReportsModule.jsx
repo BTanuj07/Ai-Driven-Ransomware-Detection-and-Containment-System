@@ -21,8 +21,19 @@ const ReportsModule = () => {
   const [reportType, setReportType] = useState('all')
   const [loading, setLoading] = useState(true)
   
-  // Real data from backend
-  const [threatSummary, setThreatSummary] = useState({})
+  // Real data from backend with default values
+  const [threatSummary, setThreatSummary] = useState({
+    totalThreats: 0,
+    highRisk: 0,
+    mediumRisk: 0,
+    lowRisk: 0,
+    falsePositives: 0,
+    automatedResponses: 0,
+    containmentSuccess: 0,
+    avgResponseTime: '0s',
+    threatsBlocked: 0,
+    underInvestigation: 0
+  })
   const [trendData, setTrendData] = useState([])
   const [attackTypes, setAttackTypes] = useState([])
   const [incidents, setIncidents] = useState([])
@@ -38,13 +49,14 @@ const ReportsModule = () => {
         const token = session?.access_token
         
         if (!token) {
-          console.error('No authentication token available')
+          console.error('No authentication token available for Reports')
           setLoading(false)
           return
         }
         
         const headers = { Authorization: `Bearer ${token}` }
 
+        console.log('Fetching reports data...')
         const [summaryRes, trendRes, attackTypesRes, incidentsRes] = await Promise.all([
           apiClient.get('/api/reports/summary', { headers }),
           apiClient.get('/api/reports/trend?days=7', { headers }),
@@ -52,12 +64,20 @@ const ReportsModule = () => {
           apiClient.get('/api/reports/incidents?limit=50', { headers })
         ])
 
+        console.log('Reports data received:', {
+          summary: summaryRes.data,
+          trendCount: trendRes.data.trendData?.length,
+          attackTypesCount: attackTypesRes.data.attackTypes?.length,
+          incidentsCount: incidentsRes.data.incidents?.length
+        })
+
         setThreatSummary(summaryRes.data)
         setTrendData(trendRes.data.trendData || [])
         setAttackTypes(attackTypesRes.data.attackTypes || [])
         setIncidents(incidentsRes.data.incidents || [])
       } catch (error) {
         console.error('Failed to fetch reports data:', error)
+        console.error('Error details:', error.response?.data || error.message)
         if (error.response?.status === 401) {
           console.error('Authentication failed - please log in again')
         }
