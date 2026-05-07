@@ -7,7 +7,7 @@
 
 ## 🎯 Overview
 
-ARCS is a production-ready prototype for detecting and autonomously containing ransomware attacks using:
+ARCS is a production-ready prototype for detecting and autonomously containing ransomware attacks using :
 - **Behavior-based anomaly detection** (NOT signature-based)
 - **Real-time risk scoring** with multi-factor analysis
 - **Automated response mechanisms** (SOAR)
