@@ -404,6 +404,28 @@ class DatabaseService:
     def _get_default_settings(self) -> Dict[str, Any]:
         """Get default system settings"""
         return {
+            # Detection Thresholds
+            "anomalyThreshold": 0.75,
+            "highRiskThreshold": 0.8,
+            "mediumRiskThreshold": 0.6,
+            "lowRiskThreshold": 0.4,
+            "falsePositiveSensitivity": 0.65,
+            "modelConfidence": 0.85,
+            
+            # Automated Response Policy
+            "autoIsolate": True,
+            "autoKillProcess": True,
+            "autoDisableUser": False,
+            "requireApproval": True,
+            
+            # Notification Settings
+            "emailAlerts": True,
+            "smsAlerts": False,
+            "criticalEscalation": True,
+            "emailAddress": "admin@arcs.local",
+            "phoneNumber": "+1 (555) 123-4567",
+            
+            # Legacy fields for backward compatibility
             "risk_threshold": {
                 "high": 0.8,
                 "medium": 0.6,
@@ -418,6 +440,11 @@ class DatabaseService:
             "session_timeout": 480,  # 8 hours in minutes
             "password_policy": {
                 "min_length": 8,
+                "require_uppercase": True,
+                "require_numbers": True,
+                "require_special": False
+            }
+        }
                 "require_uppercase": True,
                 "require_numbers": True,
                 "require_special": False

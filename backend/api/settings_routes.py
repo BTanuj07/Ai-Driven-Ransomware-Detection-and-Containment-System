@@ -87,7 +87,7 @@ async def get_service_status(request: Request, user: dict = Depends(require_auth
             "messages": "1.2M"
         },
         "mongodb": {
-            "status": "running" if db.db else "stopped",
+            "status": "running" if db.db is not None else "stopped",
             "uptime": "7d 14h 23m",
             "connections": 12
         },
