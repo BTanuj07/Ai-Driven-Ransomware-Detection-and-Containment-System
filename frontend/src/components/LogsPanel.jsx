@@ -1,8 +1,11 @@
-const formatIstTime = (value) => {
+const formatIstDateTime = (value) => {
   if (!value) return '--'
   const hasTimezone = typeof value === 'string' && /([zZ]|[+-]\d{2}:\d{2})$/.test(value)
   const date = value instanceof Date ? value : new Date(hasTimezone ? value : `${value}Z`)
-  return date.toLocaleTimeString('en-IN', {
+  return date.toLocaleString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -23,7 +26,7 @@ const LogsPanel = ({ logs }) => {
         {logs && logs.length > 0 ? (
           logs.map((log, index) => (
             <div key={index} className="mb-2 text-slate-300 hover:bg-slate-800 p-2 rounded">
-              <span className="text-slate-500">[{formatIstTime(log.timestamp)}]</span>
+              <span className="text-slate-500">[{formatIstDateTime(log.timestamp)}]</span>
               <span className="text-blue-400 ml-2">{log.hostname}</span>
               <span className="text-slate-400 ml-2">
                 CPU: {log.process_cpu_percent?.toFixed(1)}% | 

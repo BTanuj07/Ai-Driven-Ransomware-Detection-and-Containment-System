@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+python centralized_agent.py#!/usr/bin/env python3
 """
 ARCS Centralized Monitoring Agent
 Monitors multiple endpoints from a single agent:

@@ -1,9 +1,17 @@
 import os
+from pathlib import Path
 from typing import Dict, Any
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Get the directory where this config file is located (backend/)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Load environment variables from .env file in the backend directory
+env_path = BASE_DIR / '.env'
+load_dotenv(dotenv_path=env_path)
+
+print(f"📁 Loading .env from: {env_path}")
+print(f"✅ .env loaded: {env_path.exists()}")
 
 class Config:
     # Kafka Configuration

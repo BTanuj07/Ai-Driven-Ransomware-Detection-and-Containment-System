@@ -37,7 +37,6 @@ const navItems = [
   { name: 'Endpoints', icon: 'monitor', path: '/endpoints', permission: PERMISSIONS.VIEW_ENDPOINTS },
   { name: 'Network Topology', icon: 'nodes', path: '/network-topology', permission: PERMISSIONS.VIEW_NETWORK_TOPOLOGY },
   { name: 'Logs', icon: 'log', path: '/logs', permission: PERMISSIONS.VIEW_LOGS },
-  { name: 'Threat Hunting', icon: 'search', path: '/threat-hunting', permission: PERMISSIONS.THREAT_HUNTING },
   { name: 'Response Actions', icon: 'bolt', path: '/response-actions', permission: PERMISSIONS.RESPONSE_ACTIONS_FULL },
   { name: 'Reports', icon: 'report', path: '/reports', permission: PERMISSIONS.VIEW_REPORTS },
   { name: 'Settings', icon: 'gear', path: '/settings', permission: PERMISSIONS.VIEW_SETTINGS },
@@ -933,66 +932,6 @@ function AppContent() {
               </article>
             </section>
           )}
-
-          {location.pathname === '/threat-hunting' && (
-            <section className="threat-hunting-section">
-              <div className="timestamp">{now}</div>
-              <h1 style={{ fontSize: '32px', marginBottom: '24px', marginTop: '24px' }}>Threat Hunting</h1>
-              
-              <article className="panel" style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h2>Suspicious Patterns Detected</h2>
-                  <div style={{ fontSize: '14px', color: '#8fa0b6' }}>
-                    Total Indicators: <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '18px' }}>{threatPatterns.length}</span>
-                  </div>
-                </div>
-                
-                {threatPatterns.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
-                    {threatPatterns.map((pattern, index) => (
-                      <div 
-                        key={index}
-                        style={{
-                          padding: '20px',
-                          border: '1px solid rgba(99, 121, 150, 0.24)',
-                          borderLeft: `4px solid ${pattern.severity === 'CRITICAL' ? '#ef4444' : pattern.severity === 'HIGH' ? '#f59e0b' : '#14b8a6'}`,
-                          borderRadius: '8px',
-                          background: 'rgba(15, 23, 42, 0.95)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                          <h3 style={{ margin: 0, fontSize: '16px', color: '#f8fafc' }}>{pattern.type}</h3>
-                          <span style={{
-                            padding: '4px 12px',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            borderRadius: '4px',
-                            background: pattern.severity === 'CRITICAL' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                            color: pattern.severity === 'CRITICAL' ? '#fca5a5' : '#fbbf24'
-                          }}>
-                            {pattern.severity}
-                          </span>
-                        </div>
-                        <p style={{ margin: '12px 0', color: '#cbd5e1', fontSize: '14px' }}>{pattern.description}</p>
-                        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(99, 121, 150, 0.16)' }}>
-                          <div style={{ fontSize: '13px', color: '#8fa0b6', marginBottom: '8px' }}>
-                            <strong style={{ color: '#e2e8f0' }}>Count:</strong> {pattern.count}
-                          </div>
-                          <div style={{ fontSize: '13px', color: '#8fa0b6' }}>
-                            <strong style={{ color: '#e2e8f0' }}>Affected Systems:</strong> {pattern.affected_systems.join(', ')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState label="No suspicious patterns detected" />
-                )}
-              </article>
-            </section>
-          )}
-
           {location.pathname === '/alerts' && (
             <section className="alerts-section">
               <div className="timestamp">{now}</div>

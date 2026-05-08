@@ -20,6 +20,8 @@ const ReportsModule = () => {
   const [dateRange, setDateRange] = useState('7days')
   const [reportType, setReportType] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [selectedIncident, setSelectedIncident] = useState(null)
+  const [showIncidentDetails, setShowIncidentDetails] = useState(false)
   
   // Real data from backend with default values
   const [threatSummary, setThreatSummary] = useState({
@@ -38,7 +40,7 @@ const ReportsModule = () => {
   const [attackTypes, setAttackTypes] = useState([])
   const [incidents, setIncidents] = useState([])
 
-  // Fetch data from backend
+  // Fetch data from backend with real-time refresh
   useEffect(() => {
     const fetchReportsData = async () => {
       try {
@@ -87,6 +89,11 @@ const ReportsModule = () => {
     }
 
     fetchReportsData()
+    
+    // Real-time refresh every 30 seconds
+    const interval = setInterval(fetchReportsData, 30000)
+    
+    return () => clearInterval(interval)
   }, [dateRange])
 
   const handleExport = async (format) => {
@@ -138,11 +145,7 @@ const ReportsModule = () => {
           </select>
           <button className="btn-export" onClick={() => handleExport('pdf')}>
             <Icon type="download" />
-            Export PDF
-          </button>
-          <button className="btn-export" onClick={() => handleExport('csv')}>
-            <Icon type="file" />
-            Export CSV
+            Download PDF Report
           </button>
         </div>
       </div>
@@ -287,6 +290,7 @@ const ReportsModule = () => {
                 <th>Containment Action</th>
                 <th>Response Time</th>
                 <th>Status</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -305,12 +309,160 @@ const ReportsModule = () => {
                       {incident.status}
                     </span>
                   </td>
+                  <td>
+                    <button 
+                      className="btn-details"
+                      onClick={() => {
+                        setSelectedIncident(incident)
+                        setShowIncidentDetails(true)
+                      }}
+                    >
+                      View Details
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </section>
+
+      {/* Incident Details Modal */}
+      {showIncidentDetails && selectedIncident && (
+        <div className="modal-overlay" onClick={() => setShowIncidentDetails(false)}>
+          <div className="modal-content incident-details" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Incident Details - {selectedIncident.id}</h2>
+              <button className="modal-close" onClick={() => setShowIncidentDetails(false)}>×</button>
+            </div>
+            
+            <div className="incident-details-grid">
+              <div className="detail-section">
+                <h3>Basic Information</h3>
+                <div className="detail-row">
+                  <span className="detail-label">Incident ID:</span>
+                  <span className="detail-value"><code>{selectedIncident.id}</code></span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Attack Type:</span>
+                  <span className="detail-value">{selectedIncident.type}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Endpoint:</span>
+                  <span className="detail-value"><strong>{selectedIncident.endpoint}</strong></span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Detection Time:</span>
+                  <span className="detail-value">{selectedIncident.time}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Risk Score:</span>
+                  <span className="detail-value">
+                    <span className={`badge badge-${selectedIncident.risk.toLowerCase()}`}>{selectedIncident.risk}</span>
+                  </span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Status:</span>
+                  <span className="detail-value">
+                    <span className={`status-badge ${selectedIncident.status.toLowerCase()}`}>
+                      {selectedIncident.status}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Response Information</h3>
+                <div className="detail-row">
+                  <span className="detail-label">Containment Action:</span>
+                  <span className="detail-value">{selectedIncident.action}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Response Time:</span>
+                  <span className="detail-value">{selectedIncident.duration}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Automated Response:</span>
+                  <span className="detail-value">{selectedIncident.automated ? 'Yes' : 'No'}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Spread Prevented:</span>
+                  <span className="detail-value">{selectedIncident.spreadPrevented ? 'Yes' : 'No'}</span>
+                </div>
+              </div>
+
+              <div className="detail-section full-width">
+                <h3>Threat Indicators</h3>
+                <div className="indicators-grid">
+                  <div className="indicator-item">
+                    <span className="indicator-label">File Operations/min:</span>
+                    <span className="indicator-value">{selectedIncident.indicators?.fileOps || 'N/A'}</span>
+                  </div>
+                  <div className="indicator-item">
+                    <span className="indicator-label">Suspicious Extensions:</span>
+                    <span className="indicator-value">{selectedIncident.indicators?.suspiciousExt || 'N/A'}</span>
+                  </div>
+                  <div className="indicator-item">
+                    <span className="indicator-label">Encryption Indicators:</span>
+                    <span className="indicator-value">{selectedIncident.indicators?.encryption || 'N/A'}</span>
+                  </div>
+                  <div className="indicator-item">
+                    <span className="indicator-label">Network Connections:</span>
+                    <span className="indicator-value">{selectedIncident.indicators?.networkConn || 'N/A'}</span>
+                  </div>
+                  <div className="indicator-item">
+                    <span className="indicator-label">CPU Usage:</span>
+                    <span className="indicator-value">{selectedIncident.indicators?.cpuUsage || 'N/A'}%</span>
+                  </div>
+                  <div className="indicator-item">
+                    <span className="indicator-label">Memory Usage:</span>
+                    <span className="indicator-value">{selectedIncident.indicators?.memoryUsage || 'N/A'} MB</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section full-width">
+                <h3>Actions Taken</h3>
+                <div className="actions-timeline">
+                  {selectedIncident.actions?.map((action, index) => (
+                    <div key={index} className="timeline-item">
+                      <div className="timeline-dot"></div>
+                      <div className="timeline-content">
+                        <div className="timeline-time">{action.time}</div>
+                        <div className="timeline-action">{action.description}</div>
+                      </div>
+                    </div>
+                  )) || (
+                    <div className="timeline-item">
+                      <div className="timeline-dot"></div>
+                      <div className="timeline-content">
+                        <div className="timeline-action">Threat detected and contained automatically</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="detail-section full-width">
+                <h3>Additional Notes</h3>
+                <p className="detail-notes">
+                  {selectedIncident.notes || 'No additional notes available for this incident.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowIncidentDetails(false)}>
+                Close
+              </button>
+              <button className="btn-primary" onClick={() => handleExport('pdf')}>
+                <Icon type="download" />
+                Download Incident Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

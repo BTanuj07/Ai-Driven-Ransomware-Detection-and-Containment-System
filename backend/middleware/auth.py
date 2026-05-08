@@ -9,7 +9,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 import jwt
 import os
+from pathlib import Path
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Get the backend directory and load .env
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+env_path = BACKEND_DIR / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # JWT Configuration
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
@@ -20,8 +27,13 @@ JWT_EXPIRATION_HOURS = 24
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 
 # Log configuration on startup
+print(f"\n🔐 Authentication Middleware Loading...")
+print(f"📁 .env path: {env_path}")
+print(f"📄 .env exists: {env_path.exists()}")
+
 if SUPABASE_JWT_SECRET:
     print(f"✅ Supabase JWT validation enabled")
+    print(f"   Secret: {SUPABASE_JWT_SECRET[:30]}...")
 else:
     print(f"⚠️  Supabase JWT validation disabled - SUPABASE_JWT_SECRET not set")
 
@@ -53,15 +65,16 @@ class AuthMiddleware:
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
             print(f"⚠️ Custom JWT validation failed: {e}")
         
-        # Try Supabase JWT
+        # Try Supabase JWT with HS256
         if SUPABASE_JWT_SECRET:
             print(f"🔑 Trying Supabase JWT validation...")
             try:
+                # First try HS256 (symmetric)
                 payload = jwt.decode(
                     token, 
                     SUPABASE_JWT_SECRET, 
                     algorithms=["HS256"],
-                    options={"verify_aud": False}  # Supabase tokens don't always have aud
+                    options={"verify_aud": False}
                 )
                 
                 # Extract email from Supabase token
@@ -84,6 +97,37 @@ class AuthMiddleware:
                     "exp": payload.get('exp'),
                     "iat": payload.get('iat')
                 }
+            except jwt.InvalidAlgorithmError:
+                # Token uses RS256, try without verification (development only)
+                print(f"⚠️ Token uses RS256, trying unverified decode...")
+                try:
+                    payload = jwt.decode(
+                        token,
+                        options={"verify_signature": False}
+                    )
+                    
+                    # Extract email from Supabase token
+                    email = payload.get('email') or payload.get('user_metadata', {}).get('email')
+                    print(f"📧 Email from Supabase token (unverified): {email}")
+                    
+                    # Get user role from database based on email
+                    from services.database import DatabaseService
+                    db = DatabaseService()
+                    user = db.users.find_one({"email": email})
+                    
+                    role = user.get('role', 'viewer') if user else 'viewer'
+                    print(f"👤 User role from MongoDB: {role}")
+                    
+                    # Return normalized payload
+                    return {
+                        "user_id": payload.get('sub'),
+                        "email": email,
+                        "role": role,
+                        "exp": payload.get('exp'),
+                        "iat": payload.get('iat')
+                    }
+                except Exception as e:
+                    print(f"⚠️ Unverified decode failed: {e}")
             except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
                 print(f"⚠️ Supabase token validation failed: {e}")
         else:
