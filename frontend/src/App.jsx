@@ -468,7 +468,7 @@ function AppContent() {
           <div className="topbar-actions">
             <button
               className={`notification-button ${showMessagesPanel ? 'active' : ''}`}
-              aria-label="Messages"
+              aria-label="Alerts"
               onClick={() => {
                 setShowMessagesPanel(!showMessagesPanel)
                 setShowSettingsPanel(false)
@@ -477,10 +477,6 @@ function AppContent() {
             >
               <Icon type="message" />
               <span>{unreadMessages}</span>
-            </button>
-            <button className="notification-button" aria-label="Notifications">
-              <Icon type="bell" />
-              <span>{totals.high}</span>
             </button>
             <button
               className={`icon-button utility-icon ${showSettingsPanel ? 'active' : ''}`}

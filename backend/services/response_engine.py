@@ -24,7 +24,18 @@ class ResponseEngine:
         # Check if approval is required
         if settings_manager.require_approval:
             print(f"⏸️ Containment for {hostname} requires admin approval")
-            return ["PENDING_APPROVAL: Awaiting admin authorization"]
+            action = "PENDING_APPROVAL: Awaiting admin authorization"
+            actions_taken.append(action)
+            
+            # Log the pending approval as a containment action
+            self.db_service.insert_containment_action({
+                "hostname": hostname,
+                "risk_level": risk_level,
+                "action": action,
+                "details": details
+            })
+            
+            return actions_taken
         
         print(f"🛡️ Executing containment for {hostname} (Risk: {risk_level})")
         

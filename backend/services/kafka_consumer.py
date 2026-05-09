@@ -89,6 +89,15 @@ class KafkaConsumerService:
             # Store log
             self.db_service.insert_log(message)
             
+            # Update system status to track this endpoint
+            hostname = message.get("hostname")
+            if hostname:
+                self.db_service.update_system_status(hostname, {
+                    "hostname": hostname,
+                    "status": "active",
+                    "last_seen": message.get("timestamp")
+                })
+            
             # Extract features
             features = self._extract_features(message)
             

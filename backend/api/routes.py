@@ -592,7 +592,11 @@ async def get_risk_overview_endpoints(request: Request, limit: int = 10):
             else:
                 ts = timestamp
             
-            time_diff = datetime.now(IST) - ts.replace(tzinfo=None)
+            # Ensure both datetimes are timezone-aware for comparison
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=IST)
+            
+            time_diff = datetime.now(IST) - ts
             minutes = int(time_diff.total_seconds() / 60)
             
             if minutes < 1:
@@ -655,7 +659,11 @@ async def get_risk_trends(request: Request, hours: int = 24):
             else:
                 ts = timestamp
             
-            if ts.replace(tzinfo=None) >= cutoff_time:
+            # Ensure timestamp is timezone-aware for comparison
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=IST)
+            
+            if ts >= cutoff_time:
                 hour_key = ts.strftime("%H:00")
                 hourly_scores[hour_key].append(risk.get('risk_score', 0))
     

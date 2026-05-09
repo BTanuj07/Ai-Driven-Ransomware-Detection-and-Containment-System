@@ -125,6 +125,11 @@ class SMSAlertService:
         Returns True if SMS was sent, False otherwise
         """
         try:
+            # Check if SMS alerts are enabled in settings
+            if self.settings_manager and not self.settings_manager.get('smsAlerts', False):
+                logger.info("SMS alerts disabled in settings, skipping SMS")
+                return False
+            
             # Check if SMS should be sent
             if not self._should_send_sms(alert):
                 return False

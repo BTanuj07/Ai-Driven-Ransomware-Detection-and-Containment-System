@@ -445,11 +445,6 @@ class DatabaseService:
                 "require_special": False
             }
         }
-                "require_uppercase": True,
-                "require_numbers": True,
-                "require_special": False
-            }
-        }
     
     def _serialize_doc(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Convert MongoDB document to JSON-serializable dict"""

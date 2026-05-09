@@ -184,6 +184,11 @@ class EmailAlertService:
         Returns True if email was sent, False otherwise
         """
         try:
+            # Check if email alerts are enabled in settings
+            if self.settings_manager and not self.settings_manager.get('emailAlerts', True):
+                logger.info("Email alerts disabled in settings, skipping email")
+                return False
+            
             # Get admin email dynamically from settings
             admin_email = self._get_admin_email()
             
