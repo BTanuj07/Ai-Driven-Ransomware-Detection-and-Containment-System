@@ -34,6 +34,9 @@ class SMSAlertService:
         # Ultra-critical threshold (higher than email threshold)
         self.ultra_critical_threshold = 0.90  # Only send SMS for 90%+ risk
         self.ultra_critical_keywords = ['ransomware', 'encryption', 'mass_deletion']
+        
+        # Track if daily limit has been reached to prevent spam
+        self.daily_limit_reached = False
     
     def _get_admin_phone(self) -> str:
         """Get admin phone from settings manager or fallback to env"""
@@ -72,6 +75,10 @@ class SMSAlertService:
         """Check if SMS should be sent"""
         if not self.client:
             logger.warning("Twilio client not initialized")
+            return False
+        
+        # Check if daily limit already reached
+        if self.daily_limit_reached:
             return False
         
         # Check if ultra-critical
@@ -162,7 +169,20 @@ class SMSAlertService:
                 return False
                 
         except Exception as e:
-            logger.error(f"Error sending critical SMS: {str(e)}")
+            error_msg = str(e)
+            
+            # Check for Twilio daily limit error
+            if '63038' in error_msg or 'daily messages limit' in error_msg.lower():
+                if not self.daily_limit_reached:
+                    logger.warning(f"⚠️ Twilio daily SMS limit reached (50 messages/day). SMS alerts disabled until tomorrow.")
+                    self.daily_limit_reached = True
+                    # Optionally disable SMS alerts in settings to prevent spam
+                    if self.settings_manager:
+                        self.settings_manager.update({'smsAlerts': False})
+                        logger.info("SMS alerts automatically disabled in settings due to daily limit")
+            else:
+                logger.error(f"Error sending critical SMS: {error_msg}")
+            
             return False
     
     def send_test_sms(self, phone_number: str = None) -> bool:
