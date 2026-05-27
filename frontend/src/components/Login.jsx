@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const SignInIcon = ({ type }) => {
@@ -43,6 +44,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false)
 
   const { signIn, resetPassword } = useAuth()
+  const navigate = useNavigate()
 
   const handleLogin = async (event) => {
     event.preventDefault()
@@ -54,9 +56,11 @@ const Login = () => {
 
     if (error) {
       setError(error.message)
+      setLoading(false)
+    } else {
+      // Login successful - redirect to dashboard
+      navigate('/')
     }
-
-    setLoading(false)
   }
 
   const handleResetPassword = async (event) => {
@@ -65,12 +69,22 @@ const Login = () => {
     setError(null)
     setMessage(null)
 
-    const { error } = await resetPassword(email)
+    try {
+      const { error } = await resetPassword(email)
 
-    if (error) {
-      setError(error.message)
-    } else {
-      setMessage('Password reset email sent. Check your inbox.')
+      if (error) {
+        setError('Error sending recovery email. Please contact your administrator.')
+        console.error('Password reset error:', error)
+      } else {
+        setMessage('Password reset email sent! Check your inbox and spam folder.')
+        setTimeout(() => {
+          setIsResetMode(false)
+          setMessage(null)
+        }, 5000)
+      }
+    } catch (err) {
+      setError('Error sending recovery email. Please contact your administrator.')
+      console.error('Password reset error:', err)
     }
 
     setLoading(false)
@@ -210,8 +224,10 @@ const Login = () => {
               </>
             ) : (
               <>
-                Don't have an account?
-                <button type="button">Sign up</button>
+                Need access?
+                <span style={{ color: '#8fa0b6', fontSize: '14px', marginLeft: '8px' }}>
+                  Contact your administrator
+                </span>
               </>
             )}
           </p>

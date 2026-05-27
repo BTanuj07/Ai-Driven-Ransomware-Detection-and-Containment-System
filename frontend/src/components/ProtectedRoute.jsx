@@ -1,8 +1,9 @@
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import Login from './Login'
 
 const ProtectedRoute = ({ children, requiredPermission = null }) => {
   const { user, loading, checkPermission } = useAuth()
+  const navigate = useNavigate()
 
   if (loading) {
     return (
@@ -35,7 +36,8 @@ const ProtectedRoute = ({ children, requiredPermission = null }) => {
   }
 
   if (!user) {
-    return <Login />
+    navigate('/login')
+    return null
   }
 
   // Check permission if required

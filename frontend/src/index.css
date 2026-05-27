@@ -7,6 +7,12 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #020817;
   color: #e6edf7;
+  --cyan: #22d3ee;
+  --mint: #34d399;
+  --blue: #3b82f6;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --panel-edge: rgba(125, 211, 252, 0.24);
 }
 
 * {
@@ -17,8 +23,10 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 22% 8%, rgba(37, 99, 235, 0.16), transparent 32%),
+    linear-gradient(rgba(34, 211, 238, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.024) 1px, transparent 1px),
     linear-gradient(135deg, #020817 0%, #07111f 50%, #030712 100%);
+  background-size: 54px 54px, 54px 54px, auto;
 }
 
 button,
@@ -31,10 +39,37 @@ button {
 }
 
 .app-shell {
+  position: relative;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   min-height: 100vh;
   transition: grid-template-columns 0.28s ease;
+  isolation: isolate;
+}
+
+.app-shell::before,
+.app-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.app-shell::before {
+  opacity: 0.54;
+  background:
+    linear-gradient(115deg, transparent 0 35%, rgba(34, 211, 238, 0.08) 45%, transparent 55% 100%),
+    linear-gradient(rgba(125, 211, 252, 0.035) 1px, transparent 1px);
+  background-size: 260% 100%, 100% 7px;
+  animation: ambient-scan 11s linear infinite;
+}
+
+.app-shell::after {
+  opacity: 0.22;
+  background:
+    linear-gradient(90deg, transparent 0 16%, rgba(20, 184, 166, 0.08) 16.5%, transparent 18% 68%, rgba(239, 68, 68, 0.06) 69%, transparent 71%),
+    repeating-linear-gradient(135deg, transparent 0 42px, rgba(125, 211, 252, 0.025) 43px, transparent 45px);
 }
 
 .app-shell.sidebar-collapsed {
@@ -48,7 +83,10 @@ button {
   display: flex;
   flex-direction: column;
   border-right: 1px solid rgba(99, 121, 150, 0.22);
-  background: rgba(3, 10, 24, 0.9);
+  background:
+    linear-gradient(180deg, rgba(12, 25, 48, 0.96), rgba(2, 8, 18, 0.94)),
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(34, 211, 238, 0.03) 23px, transparent 24px);
+  box-shadow: inset -1px 0 0 rgba(34, 211, 238, 0.14), 24px 0 70px rgba(0, 0, 0, 0.24);
   transition: width 0.28s ease, padding 0.28s ease;
 }
 
@@ -62,6 +100,7 @@ button {
 }
 
 .brand-mark {
+  position: relative;
   display: grid;
   place-items: center;
   width: 56px;
@@ -71,6 +110,17 @@ button {
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.24), rgba(37, 99, 235, 0.08));
   overflow: hidden;
+  box-shadow: 0 0 34px rgba(59, 130, 246, 0.22);
+}
+
+.brand-mark::after,
+.signin-brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: inherit;
+  animation: halo-spin 9s linear infinite;
 }
 
 .brand-mark svg {
@@ -100,6 +150,7 @@ button {
 }
 
 .sidebar nav button {
+  position: relative;
   display: grid;
   grid-template-columns: 24px 1fr;
   align-items: center;
@@ -111,7 +162,17 @@ button {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  transition: background 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+  overflow: hidden;
+  transition: background 0.22s ease, border-color 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.sidebar nav button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(125, 211, 252, 0.16), transparent);
+  transform: translateX(-110%);
+  transition: transform 0.45s ease;
 }
 
 .sidebar nav button svg,
@@ -123,9 +184,14 @@ button {
 .sidebar nav button.active,
 .sidebar nav button:hover {
   color: #eff6ff;
-  border-color: rgba(59, 130, 246, 0.45);
-  background: #103a91;
+  border-color: rgba(34, 211, 238, 0.48);
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.24), rgba(37, 99, 235, 0.34));
+  box-shadow: inset 3px 0 0 var(--cyan), 0 12px 30px rgba(14, 165, 233, 0.12);
   transform: translateX(3px);
+}
+
+.sidebar nav button:hover::after {
+  transform: translateX(110%);
 }
 
 .system-status {
@@ -199,6 +265,8 @@ button {
   inset: 8px;
   border-radius: 50%;
   background: #34d399;
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.84);
+  animation: status-pulse 1.8s ease-in-out infinite;
 }
 
 .mini-sparkline {
@@ -213,7 +281,13 @@ button {
   flex: 1;
   border-radius: 4px 4px 0 0;
   background: linear-gradient(180deg, #34d399, rgba(52, 211, 153, 0.1));
+  animation: equalizer 1.7s ease-in-out infinite alternate;
+  animation-delay: calc(var(--i, 0) * 80ms);
 }
+
+.mini-sparkline span:nth-child(3n + 1) { animation-delay: 0.08s; }
+.mini-sparkline span:nth-child(3n + 2) { animation-delay: 0.24s; }
+.mini-sparkline span:nth-child(3n + 3) { animation-delay: 0.4s; }
 
 .system-status p {
   margin: 0;
@@ -258,8 +332,11 @@ button {
   height: 92px;
   padding: 0 28px;
   border-bottom: 1px solid rgba(99, 121, 150, 0.22);
-  background: rgba(3, 10, 24, 0.88);
+  background:
+    linear-gradient(90deg, rgba(3, 10, 24, 0.94), rgba(7, 19, 38, 0.9)),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.08), transparent);
   backdrop-filter: blur(14px);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
 }
 
 .icon-button,
@@ -323,6 +400,14 @@ button {
   border-radius: 8px;
   background: rgba(3, 10, 24, 0.76);
   position: relative;
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.04);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+}
+
+.search-box:focus-within {
+  border-color: rgba(34, 211, 238, 0.62);
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.08), 0 14px 38px rgba(14, 165, 233, 0.12);
+  transform: translateY(-1px);
 }
 
 .search-box input {
@@ -652,12 +737,44 @@ main {
 
 .metric-card,
 .panel {
+  position: relative;
   border: 1px solid rgba(99, 121, 150, 0.24);
   border-radius: 8px;
   background:
     linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(4, 12, 26, 0.96));
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
   transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+.metric-card::before,
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(120deg, transparent 0 35%, rgba(125, 211, 252, 0.11) 46%, transparent 58% 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 38%);
+  background-size: 240% 100%, 100% 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease;
+}
+
+.metric-card::after,
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(120deg, rgba(34, 211, 238, 0.34), transparent 28%, rgba(52, 211, 153, 0.2) 54%, transparent 76%) border-box;
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease;
 }
 
 .metric-card {
@@ -667,15 +784,27 @@ main {
   min-height: 132px;
   padding: 24px;
   align-items: center;
+  animation: card-rise 0.45s ease both;
 }
 
 .metric-icon {
+  position: relative;
   display: grid;
   place-items: center;
   width: 56px;
   height: 56px;
   border-radius: 50%;
   background: rgba(59, 130, 246, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12);
+}
+
+.metric-icon::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 50%;
+  animation: icon-orbit 5s linear infinite;
 }
 
 .metric-icon svg {
@@ -757,13 +886,25 @@ main {
   min-width: 0;
   padding: 20px;
   overflow: hidden;
+  animation: card-rise 0.5s ease both;
 }
 
 .metric-card:hover,
 .panel:hover {
-  transform: translateY(-2px);
-  border-color: rgba(96, 165, 250, 0.28);
-  box-shadow: 0 26px 66px rgba(0, 0, 0, 0.24);
+  transform: translateY(-4px);
+  border-color: var(--panel-edge);
+  box-shadow: 0 30px 76px rgba(0, 0, 0, 0.28), 0 0 34px rgba(14, 165, 233, 0.08);
+}
+
+.metric-card:hover::before,
+.panel:hover::before {
+  opacity: 1;
+  animation: sheen-move 1.1s ease forwards;
+}
+
+.metric-card:hover::after,
+.panel:hover::after {
+  opacity: 1;
 }
 
 .panel-header {
@@ -781,6 +922,13 @@ main {
   border: 1px solid rgba(99, 121, 150, 0.32);
   border-radius: 8px;
   background: rgba(8, 19, 38, 0.86);
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.panel-header button:hover {
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(14, 165, 233, 0.12);
+  transform: translateY(-1px);
 }
 
 .risk-overview {
@@ -832,10 +980,12 @@ main {
   min-height: 318px;
   border-radius: 8px;
   background:
+    linear-gradient(120deg, transparent 0 44%, rgba(34, 211, 238, 0.12) 48%, transparent 54% 100%),
     linear-gradient(rgba(99, 121, 150, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(99, 121, 150, 0.045) 1px, transparent 1px);
-  background-size: 48px 48px;
+  background-size: 220% 100%, 48px 48px, 48px 48px;
   overflow: hidden;
+  animation: topology-scan 8s linear infinite;
 }
 
 .network-overview-strip {
@@ -871,6 +1021,7 @@ main {
     linear-gradient(22deg, transparent 48%, #2563eb 49%, #2563eb 50%, transparent 51%),
     linear-gradient(-15deg, transparent 49%, #ef4444 50%, transparent 51%),
     linear-gradient(0deg, transparent 49%, #14b8a6 50%, transparent 51%);
+  animation: link-flicker 2.4s ease-in-out infinite;
 }
 
 .node {
@@ -884,6 +1035,8 @@ main {
   border: 1px solid #475569;
   border-radius: 50%;
   background: #101b2f;
+  box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.22);
+  animation: node-float 4s ease-in-out infinite;
 }
 
 .node svg {
@@ -1078,6 +1231,8 @@ th {
   background:
     radial-gradient(circle at center, #101b2f 52%, transparent 54%),
     conic-gradient(var(--color) calc(var(--value) * 1%), #203044 0);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--color) 22%, transparent);
+  animation: gauge-breathe 2.8s ease-in-out infinite;
 }
 
 .gauge strong {
@@ -1649,6 +1804,92 @@ th {
   }
 }
 
+@keyframes ambient-scan {
+  from { background-position: 130% 0, 0 0; }
+  to { background-position: -130% 0, 0 0; }
+}
+
+@keyframes halo-spin {
+  from { transform: rotate(0deg) scale(1); opacity: 0.45; }
+  50% { opacity: 0.9; }
+  to { transform: rotate(360deg) scale(1.06); opacity: 0.45; }
+}
+
+@keyframes status-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.35); opacity: 1; }
+}
+
+@keyframes equalizer {
+  from { transform: scaleY(0.72); opacity: 0.62; }
+  to { transform: scaleY(1.08); opacity: 1; }
+}
+
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sheen-move {
+  from { background-position: 130% 0, 0 0; }
+  to { background-position: -90% 0, 0 0; }
+}
+
+@keyframes icon-orbit {
+  from { transform: rotate(0deg) scale(1); opacity: 0.42; }
+  50% { opacity: 0.84; }
+  to { transform: rotate(360deg) scale(1.04); opacity: 0.42; }
+}
+
+@keyframes topology-scan {
+  from { background-position: 140% 0, 0 0, 0 0; }
+  to { background-position: -140% 0, 0 0, 0 0; }
+}
+
+@keyframes link-flicker {
+  0%, 100% { opacity: 0.42; filter: saturate(1); }
+  50% { opacity: 0.78; filter: saturate(1.5); }
+}
+
+@keyframes node-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes radar-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes gauge-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+
+@keyframes grid-drift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 54px 54px, 54px 54px; }
+}
+
+@keyframes ring-glow {
+  0%, 100% { opacity: 0.62; filter: drop-shadow(0 0 5px rgba(20, 184, 166, 0.28)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 16px rgba(74, 222, 128, 0.45)); }
+}
+
+@keyframes shield-hover {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-10px); }
+}
+
+@keyframes device-hover {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes line-flow {
+  0%, 100% { opacity: 0.38; filter: saturate(1); }
+  50% { opacity: 0.95; filter: saturate(1.6); }
+}
+
 .recharts-text {
   fill: #8b9bb0;
 }
@@ -1826,12 +2067,14 @@ th {
   gap: 22px;
   padding: 48px 38px 24px;
   background:
-    radial-gradient(circle at 43% 45%, rgba(20, 184, 166, 0.1), transparent 28%),
-    radial-gradient(circle at 76% 32%, rgba(37, 99, 235, 0.12), transparent 26%),
+    linear-gradient(rgba(34, 211, 238, 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.026) 1px, transparent 1px),
     linear-gradient(135deg, #02070d 0%, #050d19 55%, #020611 100%);
+  background-size: 64px 64px, 64px 64px, auto;
 }
 
 .signin-shell {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(420px, 1fr) minmax(420px, 0.95fr);
   gap: 64px;
@@ -1843,9 +2086,22 @@ th {
   border-radius: 24px;
   background: rgba(1, 8, 18, 0.78);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+.signin-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0 42%, rgba(34, 211, 238, 0.11) 50%, transparent 58% 100%);
+  background-size: 240% 100%;
+  animation: ambient-scan 9s linear infinite;
+  pointer-events: none;
 }
 
 .signin-visual {
+  position: relative;
+  z-index: 1;
   min-width: 0;
 }
 
@@ -1857,6 +2113,7 @@ th {
 }
 
 .signin-brand-mark {
+  position: relative;
   display: grid;
   place-items: center;
   width: 78px;
@@ -1866,6 +2123,7 @@ th {
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.24), rgba(37, 99, 235, 0.08));
   overflow: hidden;
+  box-shadow: 0 0 42px rgba(59, 130, 246, 0.22);
 }
 
 .signin-brand-mark svg {
@@ -1932,6 +2190,7 @@ th {
     linear-gradient(90deg, rgba(14, 165, 233, 0.12) 1px, transparent 1px);
   background-size: 54px 54px;
   mask-image: radial-gradient(ellipse at center, black 12%, transparent 72%);
+  animation: grid-drift 8s linear infinite;
 }
 
 .central-platform {
@@ -1963,6 +2222,7 @@ th {
   border: 2px solid rgba(20, 184, 166, 0.75);
   border-radius: 50%;
   transform: translateX(-50%) rotateX(64deg);
+  animation: ring-glow 2.8s ease-in-out infinite;
 }
 
 .ring-one {
@@ -1975,6 +2235,7 @@ th {
   width: 170px;
   height: 76px;
   border-color: rgba(74, 222, 128, 0.9);
+  animation-delay: 0.55s;
 }
 
 .glow-shield {
@@ -1989,6 +2250,7 @@ th {
   color: #52f7a7;
   transform: translateX(-50%);
   filter: drop-shadow(0 0 24px rgba(74, 222, 128, 0.62));
+  animation: shield-hover 3.2s ease-in-out infinite;
 }
 
 .glow-shield svg {
@@ -2027,6 +2289,12 @@ th {
   border-radius: 8px;
   background: linear-gradient(145deg, #10213a, #061329);
   box-shadow: 0 20px 34px rgba(0, 0, 0, 0.38);
+  animation: device-hover 4s ease-in-out infinite;
+}
+
+.device-two,
+.device-four {
+  animation-delay: 0.8s;
 }
 
 .device::before,
@@ -2088,6 +2356,7 @@ th {
   height: 2px;
   background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.82), transparent);
   transform-origin: center;
+  animation: line-flow 2.1s ease-in-out infinite;
 }
 
 .line-one {
@@ -2162,6 +2431,8 @@ th {
 }
 
 .signin-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 780px;
   justify-self: end;
@@ -2170,6 +2441,17 @@ th {
   border-radius: 18px;
   background: rgba(10, 19, 34, 0.96);
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.signin-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0 38%, rgba(52, 211, 153, 0.09) 48%, transparent 58% 100%);
+  background-size: 240% 100%;
+  animation: ambient-scan 8s linear infinite;
+  pointer-events: none;
 }
 
 .signin-heading {
@@ -2227,6 +2509,13 @@ th {
   border: 1px solid rgba(99, 121, 150, 0.42);
   border-radius: 8px;
   background: rgba(2, 8, 18, 0.72);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+}
+
+.signin-field > div:focus-within {
+  border-color: rgba(34, 211, 238, 0.62);
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.08);
+  transform: translateY(-1px);
 }
 
 .signin-field svg {
@@ -2309,6 +2598,7 @@ th {
 }
 
 .signin-submit {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 30px;
   align-items: center;
@@ -2322,6 +2612,26 @@ th {
   font-size: 24px;
   font-weight: 700;
   box-shadow: 0 16px 40px rgba(37, 99, 235, 0.18);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.signin-submit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-120%);
+  transition: transform 0.55s ease;
+}
+
+.signin-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 50px rgba(20, 184, 166, 0.24);
+}
+
+.signin-submit:hover::after {
+  transform: translateX(120%);
 }
 
 .signin-submit:disabled {

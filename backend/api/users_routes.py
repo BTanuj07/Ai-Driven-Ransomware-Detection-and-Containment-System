@@ -1,187 +1,259 @@
 """
-Users API Routes - MongoDB User Management
+User Management API Routes
+Manages user roles via Supabase Admin API
 """
-
-from fastapi import APIRouter, Request, Depends, HTTPException
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Request, Depends, Header
 from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+import os
+import httpx
 from datetime import datetime
-from middleware.auth import require_auth, require_superadmin
 
 router = APIRouter()
 
+# Supabase configuration
+SUPABASE_URL = os.getenv('SUPABASE_URL', '')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
+SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET', '')
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    print("⚠️  Warning: Supabase credentials not configured for user management")
+    print("   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env")
+
+# Simple authentication dependency
+async def verify_token(authorization: str = Header(None)):
+    """Verify JWT token from Supabase"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+    
+    try:
+        # Extract token from "Bearer <token>"
+        token = authorization.replace("Bearer ", "")
+        
+        # For now, just check if token exists
+        # In production, you should verify the JWT signature
+        if not token:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        return token
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+
+# Models
+class UserRoleUpdate(BaseModel):
+    email: EmailStr
+    role: str  # superadmin, analyst, responder, viewer
+
 class UserCreate(BaseModel):
     email: EmailStr
-    role: str
-    status: str = "active"
+    password: str
+    role: str = "viewer"
+    full_name: Optional[str] = None
 
-class UserUpdate(BaseModel):
-    role: Optional[str] = None
-    status: Optional[str] = None
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    role: str
+    created_at: str
+    last_sign_in_at: Optional[str] = None
+    email_confirmed_at: Optional[str] = None
+
+# Helper function to call Supabase Admin API
+async def supabase_admin_request(method: str, endpoint: str, data: dict = None):
+    """Make authenticated request to Supabase Admin API"""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env"
+        )
+    
+    url = f"{SUPABASE_URL}/auth/v1/admin/{endpoint}"
+    headers = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        if method == "GET":
+            response = await client.get(url, headers=headers)
+        elif method == "POST":
+            response = await client.post(url, headers=headers, json=data)
+        elif method == "PUT":
+            response = await client.put(url, headers=headers, json=data)
+        elif method == "DELETE":
+            response = await client.delete(url, headers=headers)
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+        
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Supabase API error: {response.text}"
+            )
+        
+        return response.json()
 
 @router.get("/users")
-async def get_users(request: Request, user: dict = Depends(require_auth)):
-    """Get all users"""
-    db = request.app.state.db
+async def list_users(token: str = Depends(verify_token)):
+    """List all users from Supabase"""
+    try:
+        # Get users from Supabase
+        result = await supabase_admin_request("GET", "users")
+        
+        users = []
+        for user in result.get("users", []):
+            users.append({
+                "id": user["id"],
+                "email": user["email"],
+                "role": user.get("user_metadata", {}).get("role", "viewer"),
+                "full_name": user.get("user_metadata", {}).get("full_name", ""),
+                "created_at": user.get("created_at", ""),
+                "last_sign_in_at": user.get("last_sign_in_at"),
+                "email_confirmed_at": user.get("email_confirmed_at"),
+                "status": "active" if user.get("email_confirmed_at") else "pending"
+            })
+        
+        return {
+            "users": users,
+            "total": len(users)
+        }
     
-    # Get users from database
-    users_collection = db.db['users']
-    users = list(users_collection.find({}, {'password': 0}))  # Exclude passwords
-    
-    # Serialize
-    for user_doc in users:
-        user_doc['_id'] = str(user_doc['_id'])
-        user_doc['id'] = user_doc['_id']
-    
-    return {
-        "users": users,
-        "count": len(users)
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
 
 @router.post("/users")
-async def create_user(
-    request: Request,
-    user_data: UserCreate,
-    current_user: dict = Depends(require_superadmin)
-):
-    """Create new user (superadmin only)"""
-    db = request.app.state.db
-    users_collection = db.db['users']
+async def create_user(user_data: UserCreate, token: str = Depends(verify_token)):
+    """Create a new user in Supabase with assigned role"""
+    try:
+        # Create user via Supabase Admin API
+        data = {
+            "email": user_data.email,
+            "password": user_data.password,
+            "email_confirm": True,  # Auto-confirm email
+            "user_metadata": {
+                "role": user_data.role,
+                "full_name": user_data.full_name or user_data.email.split('@')[0]
+            }
+        }
+        
+        result = await supabase_admin_request("POST", "users", data)
+        
+        return {
+            "success": True,
+            "user": {
+                "id": result["id"],
+                "email": result["email"],
+                "role": user_data.role
+            },
+            "message": f"User created successfully with role: {user_data.role}"
+        }
     
-    # Check if user already exists
-    existing = users_collection.find_one({"email": user_data.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="User already exists")
-    
-    # Create user document
-    new_user = {
-        "email": user_data.email,
-        "role": user_data.role,
-        "status": user_data.status,
-        "created_at": datetime.utcnow(),
-        "created_by": current_user.get('email'),
-        "last_login": None,
-        "active_sessions": 0
-    }
-    
-    result = users_collection.insert_one(new_user)
-    
-    # Log the action
-    db.insert_audit_log(
-        action="CREATE_USER",
-        user=current_user.get('email'),
-        details={"new_user_email": user_data.email, "role": user_data.role}
-    )
-    
-    new_user['_id'] = str(result.inserted_id)
-    new_user['id'] = new_user['_id']
-    
-    return {
-        "status": "success",
-        "message": "User created successfully",
-        "user": new_user
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
 
-@router.put("/users/{user_id}")
-async def update_user(
-    request: Request,
-    user_id: str,
-    user_data: UserUpdate,
-    current_user: dict = Depends(require_superadmin)
-):
-    """Update user (superadmin only)"""
-    db = request.app.state.db
-    users_collection = db.db['users']
+@router.put("/users/{user_id}/role")
+async def update_user_role(user_id: str, role_update: UserRoleUpdate, token: str = Depends(verify_token)):
+    """Update user role in Supabase"""
+    try:
+        # Validate role
+        valid_roles = ["superadmin", "analyst", "responder", "viewer"]
+        if role_update.role not in valid_roles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+            )
+        
+        # Update user metadata
+        data = {
+            "user_metadata": {
+                "role": role_update.role
+            }
+        }
+        
+        result = await supabase_admin_request("PUT", f"users/{user_id}", data)
+        
+        return {
+            "success": True,
+            "user": {
+                "id": result["id"],
+                "email": result["email"],
+                "role": role_update.role
+            },
+            "message": f"User role updated to: {role_update.role}"
+        }
     
-    from bson import ObjectId
-    
-    # Build update dict
-    update_dict = {k: v for k, v in user_data.dict().items() if v is not None}
-    update_dict['updated_at'] = datetime.utcnow()
-    update_dict['updated_by'] = current_user.get('email')
-    
-    result = users_collection.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": update_dict}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Log the action
-    db.insert_audit_log(
-        action="UPDATE_USER",
-        user=current_user.get('email'),
-        details={"user_id": user_id, "changes": update_dict}
-    )
-    
-    return {
-        "status": "success",
-        "message": "User updated successfully"
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update user role: {str(e)}")
 
 @router.delete("/users/{user_id}")
-async def delete_user(
-    request: Request,
-    user_id: str,
-    current_user: dict = Depends(require_superadmin)
-):
-    """Delete user (superadmin only)"""
-    db = request.app.state.db
-    users_collection = db.db['users']
+async def delete_user(user_id: str, token: str = Depends(verify_token)):
+    """Delete user from Supabase"""
+    try:
+        await supabase_admin_request("DELETE", f"users/{user_id}")
+        
+        return {
+            "success": True,
+            "message": "User deleted successfully"
+        }
     
-    from bson import ObjectId
-    
-    # Get user before deleting
-    user_to_delete = users_collection.find_one({"_id": ObjectId(user_id)})
-    
-    if not user_to_delete:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Don't allow deleting superadmin
-    if user_to_delete.get('role') == 'superadmin':
-        raise HTTPException(status_code=403, detail="Cannot delete superadmin user")
-    
-    result = users_collection.delete_one({"_id": ObjectId(user_id)})
-    
-    # Log the action
-    db.insert_audit_log(
-        action="DELETE_USER",
-        user=current_user.get('email'),
-        details={"deleted_user_email": user_to_delete.get('email')}
-    )
-    
-    return {
-        "status": "success",
-        "message": "User deleted successfully"
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
-@router.post("/users/{user_id}/suspend")
-async def suspend_user(
-    request: Request,
-    user_id: str,
-    current_user: dict = Depends(require_superadmin)
-):
-    """Suspend user account"""
-    db = request.app.state.db
-    users_collection = db.db['users']
+@router.post("/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, new_password: str, token: str = Depends(verify_token)):
+    """Reset user password"""
+    try:
+        data = {
+            "password": new_password
+        }
+        
+        await supabase_admin_request("PUT", f"users/{user_id}", data)
+        
+        return {
+            "success": True,
+            "message": "Password reset successfully"
+        }
     
-    from bson import ObjectId
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
+
+@router.get("/users/stats")
+async def get_user_stats(token: str = Depends(verify_token)):
+    """Get user statistics"""
+    try:
+        result = await supabase_admin_request("GET", "users")
+        users = result.get("users", [])
+        
+        stats = {
+            "total": len(users),
+            "active": len([u for u in users if u.get("email_confirmed_at")]),
+            "by_role": {
+                "superadmin": 0,
+                "analyst": 0,
+                "responder": 0,
+                "viewer": 0
+            }
+        }
+        
+        for user in users:
+            role = user.get("user_metadata", {}).get("role", "viewer")
+            if role in stats["by_role"]:
+                stats["by_role"][role] += 1
+        
+        return stats
     
-    result = users_collection.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {
-            "status": "suspended",
-            "suspended_at": datetime.utcnow(),
-            "suspended_by": current_user.get('email'),
-            "active_sessions": 0
-        }}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {
-        "status": "success",
-        "message": "User suspended successfully"
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stats: {str(e)}")

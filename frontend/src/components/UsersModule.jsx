@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-
-const STORAGE_KEY = 'arcs_user_management'
-
-const defaultUsers = [
-  { id: 1, email: 'tanuj077777@gmail.com', role: 'superadmin', status: 'active', lastLogin: '2026-04-26 11:45:23', activeSessions: 2 },
-  { id: 2, email: 'analyst@arcs.com', role: 'analyst', status: 'active', lastLogin: '2026-04-26 10:23:15', activeSessions: 1 },
-  { id: 3, email: 'responder@arcs.com', role: 'responder', status: 'active', lastLogin: '2026-04-26 09:12:45', activeSessions: 1 },
-  { id: 4, email: 'viewer@arcs.com', role: 'viewer', status: 'active', lastLogin: '2026-04-25 18:34:12', activeSessions: 0 }
-]
+import { apiClient } from '../lib/api'
+import { supabase } from '../lib/supabase'
 
 const roleOptions = [
   { value: 'superadmin', label: 'Super Admin', description: 'Full control over settings, users, reports, and containment.' },
@@ -26,27 +19,41 @@ const badgeStyles = {
 const roleLabel = (role) => roleOptions.find(option => option.value === role)?.label || role
 
 export default function UsersModule({ userRole }) {
-  const [users, setUsers] = useState(() => {
-    if (typeof window === 'undefined') return defaultUsers
-    const saved = window.localStorage.getItem(STORAGE_KEY)
-    if (!saved) return defaultUsers
-
-    try {
-      const parsed = JSON.parse(saved)
-      return Array.isArray(parsed) && parsed.length ? parsed : defaultUsers
-    } catch {
-      return defaultUsers
-    }
-  })
-  const [form, setForm] = useState({ email: '', role: 'viewer' })
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState({ email: '', password: '', role: 'viewer', fullName: '' })
+  const [editingUser, setEditingUser] = useState(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const isSuperAdmin = userRole === 'superadmin'
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(users))
+  // Fetch users from backend
+  const fetchUsers = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        console.error('No authentication token')
+        return
+      }
+      
+      const response = await apiClient.get('/api/supabase/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      setUsers(response.data.users || [])
+    } catch (error) {
+      console.error('Failed to fetch users:', error)
+      alert('Failed to load users. Please refresh the page.')
+    } finally {
+      setLoading(false)
     }
-  }, [users])
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
 
   const metrics = useMemo(() => ({
     total: users.length,
@@ -55,35 +62,112 @@ export default function UsersModule({ userRole }) {
     readOnly: users.filter(user => user.role === 'viewer').length
   }), [users])
 
-  const handleAddUser = (event) => {
+  const handleAddUser = async (event) => {
     event.preventDefault()
-    if (!form.email.trim()) return
+    
+    if (!form.email.trim() || !form.password.trim()) {
+      alert('Email and password are required')
+      return
+    }
 
-    setUsers((current) => [
-      {
-        id: current.length + 1,
+    if (form.password.length < 6) {
+      alert('Password must be at least 6 characters')
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        alert('Authentication required. Please log in again.')
+        return
+      }
+
+      const response = await apiClient.post('/api/supabase/users', {
         email: form.email.trim(),
+        password: form.password,
         role: form.role,
-        status: 'active',
-        lastLogin: 'Not signed in yet',
-        activeSessions: 0
-      },
-      ...current
-    ])
+        full_name: form.fullName.trim() || form.email.split('@')[0]
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
 
-    setForm({ email: '', role: 'viewer' })
+      alert(`User created successfully with role: ${form.role}`)
+      setForm({ email: '', password: '', role: 'viewer', fullName: '' })
+      fetchUsers() // Refresh user list
+    } catch (error) {
+      console.error('Failed to create user:', error)
+      alert(error.response?.data?.detail || 'Failed to create user. Please try again.')
+    }
   }
 
-  const handleTerminateUser = (id) => {
-    setUsers((current) => current.map((user) => (
-      user.id === id
-        ? { ...user, status: 'suspended', activeSessions: 0, lastLogin: `${user.lastLogin} • suspended` }
-        : user
-    )))
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        alert('Authentication required. Please log in again.')
+        return
+      }
+
+      const user = users.find(u => u.id === userId)
+      
+      await apiClient.put(`/api/supabase/users/${userId}/role`, {
+        email: user.email,
+        role: newRole
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      alert(`User role updated to: ${newRole}. User must log out and log back in to see changes.`)
+      fetchUsers() // Refresh user list
+      setShowEditModal(false)
+      setEditingUser(null)
+    } catch (error) {
+      console.error('Failed to update user role:', error)
+      alert(error.response?.data?.detail || 'Failed to update user role. Please try again.')
+    }
   }
 
-  const handleDeleteUser = (id) => {
-    setUsers((current) => current.filter((user) => user.id !== id))
+  const handleDeleteUser = async (userId) => {
+    const user = users.find(u => u.id === userId)
+    
+    if (!confirm(`Are you sure you want to delete user: ${user.email}?\n\nThis will permanently remove them from Supabase and they will not be able to log in.`)) {
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        alert('Authentication required. Please log in again.')
+        return
+      }
+
+      await apiClient.delete(`/api/supabase/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      alert('User deleted successfully from Supabase')
+      fetchUsers() // Refresh user list
+    } catch (error) {
+      console.error('Failed to delete user:', error)
+      alert(error.response?.data?.detail || 'Failed to delete user. Please try again.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="users-module" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
+          <p style={{ color: '#8fa0b6' }}>Loading users...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -118,19 +202,49 @@ export default function UsersModule({ userRole }) {
           {isSuperAdmin ? (
             <form className="user-create-form" onSubmit={handleAddUser}>
               <div className="input-group">
-                <label>User email</label>
+                <label>User email *</label>
                 <div className="input-with-icon">
                   <input
                     type="email"
                     value={form.email}
                     onChange={(event) => setForm({ ...form, email: event.target.value })}
                     placeholder="new.user@arcs.com"
+                    required
                   />
                 </div>
               </div>
 
               <div className="input-group">
-                <label>Assign role</label>
+                <label>Full Name (optional)</label>
+                <div className="input-with-icon">
+                  <input
+                    type="text"
+                    value={form.fullName}
+                    onChange={(event) => setForm({ ...form, fullName: event.target.value })}
+                    placeholder="John Doe"
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label>Temporary Password *</label>
+                <div className="input-with-icon">
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    placeholder="Minimum 6 characters"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <small style={{ color: '#8fa0b6', fontSize: '12px', marginTop: '4px' }}>
+                  User can change this password after first login
+                </small>
+              </div>
+
+              <div className="input-group">
+                <label>Assign role *</label>
                 <select
                   className="select-input"
                   value={form.role}
@@ -144,7 +258,7 @@ export default function UsersModule({ userRole }) {
 
               <div className="access-note">
                 <strong>Super Admin controls</strong>
-                <p>You can add new users, assign their project role, and terminate accounts directly from the directory below.</p>
+                <p>Create users with assigned roles. They can log in immediately with the correct permissions.</p>
               </div>
 
               <div className="role-explainer-list">
@@ -156,7 +270,7 @@ export default function UsersModule({ userRole }) {
                 ))}
               </div>
 
-              <button className="btn-save" type="submit">Add User</button>
+              <button className="btn-save" type="submit">Create User in Supabase</button>
             </form>
           ) : (
             <div className="access-note">
@@ -226,25 +340,27 @@ export default function UsersModule({ userRole }) {
                       </span>
                     </td>
                     <td><span className={`service-status ${suspended ? 'suspended' : 'running'}`}>{user.status.toUpperCase()}</span></td>
-                    <td>{user.lastLogin}</td>
-                    <td style={{ color: '#93c5fd', fontWeight: 700 }}>{user.activeSessions}</td>
+                    <td>{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'Never'}</td>
+                    <td style={{ color: '#93c5fd', fontWeight: 700 }}>-</td>
                     {isSuperAdmin && (
                       <td>
                         {user.role === 'superadmin' ? (
                           <span className="table-note">Protected</span>
-                        ) : suspended ? (
-                          <div className="table-actions">
-                            <span className="table-note danger">Suspended</span>
-                            <button className="table-action-button ghost-danger" onClick={() => handleDeleteUser(user.id)}>
-                              Delete
-                            </button>
-                          </div>
                         ) : (
                           <div className="table-actions">
-                            <button className="table-action-button warning" onClick={() => handleTerminateUser(user.id)}>
-                              Suspend
+                            <button 
+                              className="table-action-button" 
+                              onClick={() => {
+                                setEditingUser(user)
+                                setShowEditModal(true)
+                              }}
+                            >
+                              Change Role
                             </button>
-                            <button className="table-action-button danger" onClick={() => handleDeleteUser(user.id)}>
+                            <button 
+                              className="table-action-button danger" 
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
                               Delete
                             </button>
                           </div>
@@ -258,6 +374,71 @@ export default function UsersModule({ userRole }) {
           </table>
         </div>
       </article>
+
+      {/* Edit Role Modal */}
+      {showEditModal && editingUser && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Change User Role</h2>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
+            </div>
+            
+            <div style={{ padding: '24px' }}>
+              <div className="detail-row" style={{ marginBottom: '20px' }}>
+                <span className="detail-label">User:</span>
+                <span className="detail-value"><strong>{editingUser.email}</strong></span>
+              </div>
+              
+              <div className="detail-row" style={{ marginBottom: '20px' }}>
+                <span className="detail-label">Current Role:</span>
+                <span className="detail-value">
+                  <span className={`badge badge-${editingUser.role}`}>{roleLabel(editingUser.role)}</span>
+                </span>
+              </div>
+
+              <div className="input-group">
+                <label>Select New Role:</label>
+                <select
+                  className="select-input"
+                  defaultValue={editingUser.role}
+                  onChange={(e) => setEditingUser({ ...editingUser, newRole: e.target.value })}
+                >
+                  {roleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="role-explainer-list" style={{ marginTop: '20px' }}>
+                {roleOptions.map((option) => (
+                  <div className={`role-explainer ${(editingUser.newRole || editingUser.role) === option.value ? 'selected' : ''}`} key={option.value}>
+                    <strong>{option.label}</strong>
+                    <p>{option.description}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="access-note" style={{ marginTop: '20px' }}>
+                <strong>⚠️ Important</strong>
+                <p>User must log out and log back in to see the new role and permissions.</p>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowEditModal(false)}>
+                Cancel
+              </button>
+              <button 
+                className="btn-primary" 
+                onClick={() => handleUpdateRole(editingUser.id, editingUser.newRole || editingUser.role)}
+              >
+                Update Role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

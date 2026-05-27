@@ -69,7 +69,7 @@ app.include_router(router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
-app.include_router(users_router, prefix="/api")
+app.include_router(users_router, prefix="/api/supabase")  # Different prefix to avoid conflict
 
 
 @app.get("/")

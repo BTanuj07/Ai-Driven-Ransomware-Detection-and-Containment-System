@@ -109,11 +109,72 @@ const ReportsModule = () => {
       
       const headers = { Authorization: `Bearer ${token}` }
       
-      await apiClient.post(`/api/reports/export?format=${format}`, {}, { headers })
-      alert(`Report export initiated in ${format.toUpperCase()} format`)
+      // Make request to export endpoint
+      const response = await fetch(`http://localhost:8000/api/reports/export?format=${format}`, {
+        method: 'POST',
+        headers: headers
+      })
+      
+      if (!response.ok) {
+        throw new Error('Export failed')
+      }
+      
+      // Download the PDF file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ARCS_Report_${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      alert('Report downloaded successfully!')
     } catch (error) {
       console.error('Export failed:', error)
-      alert('Failed to export report')
+      alert('Failed to export report. Please try again.')
+    }
+  }
+
+  const handleExportIncident = async (incidentId) => {
+    try {
+      // Get token from Supabase session
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        alert('Authentication required. Please log in again.')
+        return
+      }
+      
+      const headers = { Authorization: `Bearer ${token}` }
+      
+      // Make request to export individual incident
+      const response = await fetch(`http://localhost:8000/api/reports/incidents/${incidentId}/export`, {
+        method: 'GET',
+        headers: headers
+      })
+      
+      if (!response.ok) {
+        throw new Error('Export failed')
+      }
+      
+      // Download the PDF file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ARCS_Incident_${incidentId}_${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      alert('Incident report downloaded successfully!')
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Failed to export incident report. Please try again.')
     }
   }
 
@@ -455,7 +516,7 @@ const ReportsModule = () => {
               <button className="btn-secondary" onClick={() => setShowIncidentDetails(false)}>
                 Close
               </button>
-              <button className="btn-primary" onClick={() => handleExport('pdf')}>
+              <button className="btn-primary" onClick={() => handleExportIncident(selectedIncident.id)}>
                 <Icon type="download" />
                 Download Incident Report
               </button>

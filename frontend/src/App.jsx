@@ -1180,12 +1180,23 @@ function AppContent() {
   )
 }
 
+import Login from './components/Login'
+import ResetPassword from './components/ResetPassword'
+
 function App() {
+  const location = useLocation()
+  
   return (
     <AuthProvider>
-      <ProtectedRoute>
-        <AppContent />
-      </ProtectedRoute>
+      {location.pathname === '/login' ? (
+        <Login />
+      ) : location.pathname === '/reset-password' ? (
+        <ResetPassword />
+      ) : (
+        <ProtectedRoute>
+          <AppContent />
+        </ProtectedRoute>
+      )}
     </AuthProvider>
   )
 }
