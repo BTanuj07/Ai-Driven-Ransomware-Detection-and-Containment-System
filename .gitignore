@@ -14,6 +14,71 @@ SUPABASE_CREDENTIALS.md
 *.key
 *.cert
 
+# Documentation Files (Keep locally, don't upload to GitHub)
+# Paper Documentation
+PAPER_*.md
+ACADEMIC_PAPER_DOCUMENTATION.md
+
+# Report Documentation
+REPORT_*.md
+
+# Implementation Guides
+*_GUIDE.md
+*_IMPLEMENTATION*.md
+*_TESTING*.md
+*_COMPLETE*.md
+*_FIXES.md
+*_FIX.md
+*_TROUBLESHOOTING.md
+*_SETUP.md
+*_SUMMARY.md
+*_EXPLAINED.md
+*_REFERENCE.md
+*_INDEX.md
+*_INSTRUCTIONS.md
+
+# Specific Documentation Files
+MASTER_DOCUMENTATION_INDEX.md
+PROJECT_COMPLETE_SUMMARY.md
+PROJECT_COMPLEXITY_SUMMARY.md
+NETWORK_TOPOLOGY_EXPLAINED.md
+TRIGGER_ATTACK_GUIDE.md
+check_email_template.md
+GITHUB_PUSH_SUMMARY.md
+GITHUB_UPLOAD_INSTRUCTIONS.md
+README.md
+
+# MFA Documentation
+MFA_*.md
+TOTP_*.md
+
+# RBAC Documentation
+RBAC_*.md
+
+# User Management Documentation
+USER_MANAGEMENT_*.md
+USERS_MODULE_*.md
+EASY_USER_MANAGEMENT_SOLUTION.md
+
+# Alert Documentation
+ALERTS_*.md
+RISK_OVERVIEW_REMOVAL.md
+
+# Login/Auth Documentation
+LOGIN_*.md
+PASSWORD_RESET_*.md
+SENDGRID_SETUP_GUIDE.md
+SUPABASE_SERVICE_KEY_SETUP.md
+
+# Reports Documentation
+REPORTS_MODULE_*.md
+
+# Utility Scripts (optional - keep if needed for development)
+update_user_role.py
+update_user_role.sql
+sync_user_role_to_mongodb.py
+UPDATE_USER_ROLE_GUIDE.md
+
 # Python
 __pycache__/
 *.py[cod]

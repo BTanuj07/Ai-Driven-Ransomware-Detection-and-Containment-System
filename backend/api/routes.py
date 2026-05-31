@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from typing import List, Dict, Any
 from datetime import datetime, timezone, timedelta
+from bson import ObjectId
 from services.network_graph import NetworkGraphService
 from services.cache_service import cache_service
 
@@ -390,24 +391,74 @@ async def acknowledge_alert(request: Request, alert_id: str):
     """Mark an alert as acknowledged"""
     db = request.app.state.db
     
-    # In a real implementation, you'd update the alert in the database
-    # For now, we'll just return success
-    return {
-        "status": "success",
-        "message": f"Alert {alert_id} acknowledged",
-        "alert_id": alert_id
-    }
+    try:
+        # Update alert status in database
+        result = db.alerts.update_one(
+            {"_id": ObjectId(alert_id)},
+            {
+                "$set": {
+                    "status": "acknowledged",
+                    "acknowledged_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        if result.modified_count > 0:
+            return {
+                "status": "success",
+                "message": f"Alert {alert_id} acknowledged",
+                "alert_id": alert_id
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Alert not found or already acknowledged",
+                "alert_id": alert_id
+            }
+    except Exception as e:
+        print(f"Error acknowledging alert: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Failed to acknowledge alert: {str(e)}",
+            "alert_id": alert_id
+        }
 
 @router.post("/alerts/{alert_id}/resolve")
 async def resolve_alert(request: Request, alert_id: str):
     """Mark an alert as resolved"""
     db = request.app.state.db
     
-    return {
-        "status": "success",
-        "message": f"Alert {alert_id} resolved",
-        "alert_id": alert_id
-    }
+    try:
+        # Update alert status in database
+        result = db.alerts.update_one(
+            {"_id": ObjectId(alert_id)},
+            {
+                "$set": {
+                    "status": "resolved",
+                    "resolved_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        if result.modified_count > 0:
+            return {
+                "status": "success",
+                "message": f"Alert {alert_id} resolved",
+                "alert_id": alert_id
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Alert not found or already resolved",
+                "alert_id": alert_id
+            }
+    except Exception as e:
+        print(f"Error resolving alert: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Failed to resolve alert: {str(e)}",
+            "alert_id": alert_id
+        }
 
 @router.get("/threat-hunting")
 async def threat_hunting(request: Request, indicator: str = None):

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { apiClient } from '../lib/api'
+import MFAVerify from './MFAVerify'
 
 const SignInIcon = ({ type }) => {
   const common = {
@@ -42,8 +44,11 @@ const Login = () => {
   const [message, setMessage] = useState(null)
   const [isResetMode, setIsResetMode] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showMFAVerify, setShowMFAVerify] = useState(false)
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [userId, setUserId] = useState(null)
 
-  const { signIn, resetPassword } = useAuth()
+  const { signIn, resetPassword, signOut } = useAuth()
   const navigate = useNavigate()
 
   const handleLogin = async (event) => {
@@ -52,15 +57,53 @@ const Login = () => {
     setError(null)
     setMessage(null)
 
-    const { error } = await signIn(email, password)
+    const { data, error } = await signIn(email, password)
 
     if (error) {
       setError(error.message)
       setLoading(false)
     } else {
-      // Login successful - redirect to dashboard
-      navigate('/')
+      // Get user ID from sign-in response
+      const userIdFromAuth = data?.user?.id || data?.user?.email
+      setUserId(userIdFromAuth)
+      
+      // Check if MFA is enabled for this user
+      try {
+        const mfaStatus = await apiClient.get(`/api/mfa/status/${userIdFromAuth}`)
+        
+        if (mfaStatus.data.enabled) {
+          // MFA is enabled - show verification modal
+          setMfaRequired(true)
+          setShowMFAVerify(true)
+          setLoading(false)
+        } else {
+          // No MFA - proceed to dashboard
+          setLoading(false)
+          navigate('/')
+        }
+      } catch (err) {
+        // If MFA status check fails, proceed without MFA
+        console.error('MFA status check failed:', err)
+        setLoading(false)
+        navigate('/')
+      }
     }
+  }
+
+  const handleMFASuccess = () => {
+    setShowMFAVerify(false)
+    setLoading(false)
+    navigate('/')
+  }
+
+  const handleMFACancel = async () => {
+    // Sign out the user since they didn't complete MFA
+    await signOut()
+    setShowMFAVerify(false)
+    setMfaRequired(false)
+    setUserId(null)
+    setError('MFA verification required. Please sign in again.')
+    setLoading(false)
   }
 
   const handleResetPassword = async (event) => {
@@ -91,7 +134,16 @@ const Login = () => {
   }
 
   return (
-    <main className="signin-page">
+    <>
+      {showMFAVerify && (
+        <MFAVerify 
+          userId={userId}
+          onSuccess={handleMFASuccess}
+          onCancel={handleMFACancel}
+        />
+      )}
+      
+      <main className="signin-page">
       <section className="signin-shell">
         <div className="signin-visual">
           <div className="signin-brand">
@@ -239,6 +291,7 @@ const Login = () => {
         <span>© 2026 ARCS Security System. All rights reserved.</span>
       </footer>
     </main>
+    </>
   )
 }
 

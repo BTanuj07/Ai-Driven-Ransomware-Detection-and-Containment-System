@@ -10,6 +10,7 @@ from api.reports_routes import router as reports_router
 from api.routes import router
 from api.settings_routes import router as settings_router
 from api.users_routes import router as users_router
+from api.mfa_routes import router as mfa_router
 from services.auth import UserService
 from services.database import DatabaseService
 from services.kafka_consumer import KafkaConsumerService
@@ -70,6 +71,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(users_router, prefix="/api/supabase")  # Different prefix to avoid conflict
+app.include_router(mfa_router, prefix="/api")  # MFA routes
 
 
 @app.get("/")

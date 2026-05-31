@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import MFASetup from './MFASetup'
 
 const Icon = ({ type }) => {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', width: '20px', height: '20px' }
@@ -20,7 +22,11 @@ const Icon = ({ type }) => {
 }
 
 const SettingsModule = () => {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [showMFASetup, setShowMFASetup] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [mfaLoading, setMfaLoading] = useState(false)
   
   // Detection Threshold Settings
   const [anomalyThreshold, setAnomalyThreshold] = useState(0.75)
@@ -84,6 +90,16 @@ const SettingsModule = () => {
         if (settings.phoneNumber) setPhoneNumber(settings.phoneNumber)
 
         setServices(servicesRes.data.services || {})
+        
+        // Check MFA status
+        if (user?.id) {
+          try {
+            const mfaRes = await apiClient.get(`/api/mfa/status/${user.id}`, { headers })
+            setMfaEnabled(mfaRes.data.enabled || false)
+          } catch (err) {
+            console.error('Failed to fetch MFA status:', err)
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch settings:', error)
         // Set default services on error
@@ -99,7 +115,7 @@ const SettingsModule = () => {
     }
 
     fetchSettings()
-  }, [])
+  }, [user])
 
   const handleSave = async () => {
     setSaveStatus('saving')
@@ -139,6 +155,39 @@ const SettingsModule = () => {
     }
   }
 
+  const handleMFASetupComplete = () => {
+    setShowMFASetup(false)
+    setMfaEnabled(true)
+  }
+
+  const handleDisableMFA = async () => {
+    if (!window.confirm('Are you sure you want to disable Two-Factor Authentication? This will make your account less secure.')) {
+      return
+    }
+
+    const code = window.prompt('Enter your current 6-digit TOTP code to disable MFA:')
+    if (!code) return
+
+    try {
+      setMfaLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
+      await apiClient.post('/api/mfa/disable', {
+        user_id: user?.id,
+        token: code
+      }, { headers })
+
+      setMfaEnabled(false)
+      alert('Two-Factor Authentication has been disabled.')
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to disable MFA. Please check your code.')
+    } finally {
+      setMfaLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="settings-module" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
@@ -151,7 +200,15 @@ const SettingsModule = () => {
   }
 
   return (
-    <div className="settings-module">
+    <>
+      {showMFASetup && (
+        <MFASetup 
+          onClose={() => setShowMFASetup(false)}
+          onSuccess={handleMFASetupComplete}
+        />
+      )}
+      
+      <div className="settings-module">
       {/* Header */}
       <div className="module-header">
         <div>
@@ -519,8 +576,119 @@ const SettingsModule = () => {
             </div>
           </div>
         </section>
+
+        {/* MFA Security Settings */}
+        <section className="settings-card">
+          <div className="card-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px' }}>
+              <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+              <circle cx="12" cy="16" r="1" />
+              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+            </svg>
+            <h2>Two-Factor Authentication (MFA)</h2>
+          </div>
+          <div className="settings-content">
+            <div style={{ 
+              padding: '20px', 
+              background: mfaEnabled ? '#10b98122' : '#f59e0b22',
+              border: `1px solid ${mfaEnabled ? '#10b981' : '#f59e0b'}`,
+              borderRadius: '8px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <div style={{ fontSize: '32px' }}>{mfaEnabled ? '🔐' : '⚠️'}</div>
+                <div>
+                  <strong style={{ color: '#fff', fontSize: '16px' }}>
+                    {mfaEnabled ? 'MFA is Enabled' : 'MFA is Disabled'}
+                  </strong>
+                  <p style={{ margin: '4px 0 0 0', color: '#8fa0b6', fontSize: '14px' }}>
+                    {mfaEnabled 
+                      ? 'Your account is protected with Two-Factor Authentication'
+                      : 'Enable MFA to add an extra layer of security to your account'
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {!mfaEnabled ? (
+              <div>
+                <h4 style={{ color: '#fff', marginBottom: '12px' }}>Why enable MFA?</h4>
+                <ul style={{ color: '#8fa0b6', fontSize: '14px', lineHeight: '1.8', marginBottom: '20px' }}>
+                  <li>Adds an extra layer of security beyond passwords</li>
+                  <li>Protects against unauthorized access even if password is compromised</li>
+                  <li>Uses time-based codes from Google Authenticator or Microsoft Authenticator</li>
+                  <li>Includes backup codes for account recovery</li>
+                </ul>
+                <button
+                  onClick={() => setShowMFASetup(true)}
+                  style={{
+                    padding: '12px 24px',
+                    background: '#10b981',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Enable Two-Factor Authentication
+                </button>
+              </div>
+            ) : (
+              <div>
+                <h4 style={{ color: '#fff', marginBottom: '12px' }}>MFA Status</h4>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '12px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{
+                    flex: 1,
+                    padding: '16px',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ color: '#8fa0b6', fontSize: '12px', marginBottom: '4px' }}>Status</div>
+                    <div style={{ color: '#10b981', fontSize: '16px', fontWeight: 'bold' }}>Active</div>
+                  </div>
+                  <div style={{
+                    flex: 1,
+                    padding: '16px',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ color: '#8fa0b6', fontSize: '12px', marginBottom: '4px' }}>Method</div>
+                    <div style={{ color: '#fff', fontSize: '16px', fontWeight: 'bold' }}>TOTP</div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDisableMFA}
+                  disabled={mfaLoading}
+                  style={{
+                    padding: '12px 24px',
+                    background: '#ef4444',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    cursor: mfaLoading ? 'not-allowed' : 'pointer',
+                    opacity: mfaLoading ? 0.5 : 1
+                  }}
+                >
+                  {mfaLoading ? 'Disabling...' : 'Disable MFA'}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </div>
+    </>
   )
 }
 

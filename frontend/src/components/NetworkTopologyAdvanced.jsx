@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
 import { supabase } from '../lib/supabase'
 
-const NetworkTopologyAdvanced = ({ networkGraph = {} }) => {
+const NetworkTopologyAdvanced = ({ networkGraph }) => {
   const [selectedNode, setSelectedNode] = useState(null)
   const [attackPath, setAttackPath] = useState([])
   const [blastRadius, setBlastRadius] = useState(null)
@@ -10,8 +10,8 @@ const NetworkTopologyAdvanced = ({ networkGraph = {} }) => {
   const [loading, setLoading] = useState(true)
 
   // Extract nodes and edges from networkGraph prop or use empty arrays
-  const [nodes, setNodes] = useState(networkGraph.nodes || [])
-  const [edges, setEdges] = useState(networkGraph.edges || [])
+  const [nodes, setNodes] = useState((networkGraph && networkGraph.nodes) || [])
+  const [edges, setEdges] = useState((networkGraph && networkGraph.edges) || [])
 
   // Simple Icon component
   const Icon = ({ type }) => {

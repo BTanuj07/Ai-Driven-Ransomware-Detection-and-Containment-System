@@ -7,7 +7,6 @@ import { PERMISSIONS, hasPermission } from './lib/supabase'
 import SettingsModule from './components/SettingsModule'
 import UsersModule from './components/UsersModule'
 import ReportsModule from './components/ReportsModule'
-import RiskOverview from './components/RiskOverview'
 import NetworkTopologyAdvanced from './components/NetworkTopologyAdvanced'
 import {
   Area,
@@ -33,7 +32,6 @@ const riskColors = {
 const navItems = [
   { name: 'Dashboard', icon: 'grid', path: '/', permission: PERMISSIONS.VIEW_DASHBOARD },
   { name: 'Alerts', icon: 'bell', path: '/alerts', permission: PERMISSIONS.VIEW_ALERTS },
-  { name: 'Risk Overview', icon: 'shield', path: '/risk-overview', permission: PERMISSIONS.VIEW_RISK_OVERVIEW },
   { name: 'Endpoints', icon: 'monitor', path: '/endpoints', permission: PERMISSIONS.VIEW_ENDPOINTS },
   { name: 'Network Topology', icon: 'nodes', path: '/network-topology', permission: PERMISSIONS.VIEW_NETWORK_TOPOLOGY },
   { name: 'Logs', icon: 'log', path: '/logs', permission: PERMISSIONS.VIEW_LOGS },
@@ -242,19 +240,35 @@ function AppContent() {
 
   const handleAcknowledgeAlert = async (alertId) => {
     try {
-      await apiClient.post(`/api/alerts/${alertId}/acknowledge`)
-      fetchData()
+      const response = await apiClient.post(`/api/alerts/${alertId}/acknowledge`)
+      console.log('Acknowledge response:', response.data)
+      
+      if (response.data.status === 'success') {
+        alert('Alert acknowledged successfully!')
+        fetchData() // Refresh data
+      } else {
+        alert(`Failed to acknowledge: ${response.data.message}`)
+      }
     } catch (error) {
       console.error('Error acknowledging alert:', error)
+      alert(`Error: ${error.response?.data?.detail || error.message}`)
     }
   }
 
   const handleResolveAlert = async (alertId) => {
     try {
-      await apiClient.post(`/api/alerts/${alertId}/resolve`)
-      fetchData()
+      const response = await apiClient.post(`/api/alerts/${alertId}/resolve`)
+      console.log('Resolve response:', response.data)
+      
+      if (response.data.status === 'success') {
+        alert('Alert resolved successfully!')
+        fetchData() // Refresh data
+      } else {
+        alert(`Failed to resolve: ${response.data.message}`)
+      }
     } catch (error) {
       console.error('Error resolving alert:', error)
+      alert(`Error: ${error.response?.data?.detail || error.message}`)
     }
   }
 
@@ -425,46 +439,7 @@ function AppContent() {
           >
             <span />
           </button>
-          <label className="search-box">
-            <Icon type="search" />
-            <input 
-              placeholder="Search for devices, alerts, IPs..." 
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
-                handleSearch(e.target.value)
-              }}
-              onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
-              onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-            />
-            {showSearchResults && searchResults.length > 0 && (
-              <div className="search-results">
-                {searchResults.map((result, index) => (
-                  <div key={index} onClick={() => {
-                    setSearchQuery(result.hostname || '')
-                    setShowSearchResults(false)
-                  }}>
-                    <span style={{ fontWeight: 600 }}>{result.hostname || 'Unknown'}</span>
-                    <span style={{ marginLeft: '12px', fontSize: '12px', color: '#8fa0b6' }}>
-                      {result.result_type}
-                    </span>
-                    {result.risk_level && (
-                      <span style={{ 
-                        marginLeft: '12px', 
-                        fontSize: '11px', 
-                        padding: '2px 8px', 
-                        borderRadius: '4px',
-                        background: result.risk_level === 'HIGH' ? '#7e22ce' : result.risk_level === 'MEDIUM' ? '#b45309' : '#0d9488',
-                        color: '#fff'
-                      }}>
-                        {result.risk_level}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </label>
+          <div style={{ flex: 1 }}></div>
           <div className="topbar-actions">
             <button
               className={`notification-button ${showMessagesPanel ? 'active' : ''}`}
@@ -776,43 +751,70 @@ function AppContent() {
                   {recentAlerts.length ? recentAlerts.map((alert, index) => {
                     const score = alert.risk_score || 0
                     const level = alert.risk_level || getRiskLevel(score)
+                    const status = alert.status || 'active'
+                    const statusColor = status === 'resolved' ? '#10b981' : status === 'acknowledged' ? '#0ea5e9' : '#f59e0b'
                     return (
                       <tr key={alert._id || index}>
                         <td>{formatTime(alert.timestamp)}</td>
                         <td>{alert.hostname || 'Unknown'}</td>
                         <td>{alert.message || 'Suspicious activity detected'}</td>
                         <td style={{ color: riskColors[level] }}>{score.toFixed(2)}</td>
-                        <td><span className={`pill pill-${level.toLowerCase()}`}>{level === 'HIGH' ? 'Contained' : 'Monitoring'}</span></td>
                         <td>
-                          <button 
-                            onClick={() => handleAcknowledgeAlert(alert._id)}
-                            style={{ 
-                              padding: '4px 8px', 
-                              marginRight: '4px', 
-                              fontSize: '11px',
-                              background: '#0ea5e9',
-                              border: 'none',
-                              borderRadius: '4px',
-                              color: '#fff',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ACK
-                          </button>
-                          <button 
-                            onClick={() => handleResolveAlert(alert._id)}
-                            style={{ 
-                              padding: '4px 8px', 
-                              fontSize: '11px',
-                              background: '#10b981',
-                              border: 'none',
-                              borderRadius: '4px',
-                              color: '#fff',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Resolve
-                          </button>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            background: `${statusColor}22`,
+                            color: statusColor,
+                            border: `1px solid ${statusColor}44`,
+                            textTransform: 'capitalize'
+                          }}>
+                            {status}
+                          </span>
+                        </td>
+                        <td>
+                          {userRole !== 'viewer' && status !== 'resolved' && (
+                            <>
+                              {status !== 'acknowledged' && (
+                                <button 
+                                  onClick={() => handleAcknowledgeAlert(alert._id)}
+                                  style={{ 
+                                    padding: '4px 8px', 
+                                    marginRight: '4px', 
+                                    fontSize: '11px',
+                                    background: '#0ea5e9',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    color: '#fff',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  ACK
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleResolveAlert(alert._id)}
+                                style={{ 
+                                  padding: '4px 8px', 
+                                  fontSize: '11px',
+                                  background: '#10b981',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  color: '#fff',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Resolve
+                              </button>
+                            </>
+                          )}
+                          {status === 'resolved' && (
+                            <span style={{ color: '#8fa0b6', fontSize: '12px' }}>Resolved</span>
+                          )}
+                          {userRole === 'viewer' && status !== 'resolved' && (
+                            <span style={{ color: '#8fa0b6', fontSize: '12px' }}>View Only</span>
+                          )}
                         </td>
                       </tr>
                     )
@@ -950,6 +952,7 @@ function AppContent() {
                       <th>Alert Message</th>
                       <th>Risk Score</th>
                       <th>Risk Level</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -957,6 +960,8 @@ function AppContent() {
                     {alerts.length ? alerts.map((alert, index) => {
                       const score = alert.risk_score || 0
                       const level = alert.risk_level || getRiskLevel(score)
+                      const status = alert.status || 'active'
+                      const statusColor = status === 'resolved' ? '#10b981' : status === 'acknowledged' ? '#0ea5e9' : '#f59e0b'
                       return (
                         <tr key={alert._id || index}>
                           <td>{formatTime(alert.timestamp)}</td>
@@ -965,40 +970,66 @@ function AppContent() {
                           <td style={{ color: riskColors[level] }}>{score.toFixed(2)}</td>
                           <td><span className={`pill pill-${level.toLowerCase()}`}>{level}</span></td>
                           <td>
-                            <button 
-                              onClick={() => handleAcknowledgeAlert(alert._id)}
-                              style={{ 
-                                padding: '4px 8px', 
-                                marginRight: '4px', 
-                                fontSize: '11px',
-                                background: '#0ea5e9',
-                                border: 'none',
-                                borderRadius: '4px',
-                                color: '#fff',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              ACK
-                            </button>
-                            <button 
-                              onClick={() => handleResolveAlert(alert._id)}
-                              style={{ 
-                                padding: '4px 8px', 
-                                fontSize: '11px',
-                                background: '#10b981',
-                                border: 'none',
-                                borderRadius: '4px',
-                                color: '#fff',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Resolve
-                            </button>
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              background: `${statusColor}22`,
+                              color: statusColor,
+                              border: `1px solid ${statusColor}44`,
+                              textTransform: 'capitalize'
+                            }}>
+                              {status}
+                            </span>
+                          </td>
+                          <td>
+                            {userRole !== 'viewer' && status !== 'resolved' && (
+                              <>
+                                {status !== 'acknowledged' && (
+                                  <button 
+                                    onClick={() => handleAcknowledgeAlert(alert._id)}
+                                    style={{ 
+                                      padding: '4px 8px', 
+                                      marginRight: '4px', 
+                                      fontSize: '11px',
+                                      background: '#0ea5e9',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      color: '#fff',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ACK
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => handleResolveAlert(alert._id)}
+                                  style={{ 
+                                    padding: '4px 8px', 
+                                    fontSize: '11px',
+                                    background: '#10b981',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    color: '#fff',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Resolve
+                                </button>
+                              </>
+                            )}
+                            {status === 'resolved' && (
+                              <span style={{ color: '#8fa0b6', fontSize: '12px' }}>Resolved</span>
+                            )}
+                            {userRole === 'viewer' && status !== 'resolved' && (
+                              <span style={{ color: '#8fa0b6', fontSize: '12px' }}>View Only</span>
+                            )}
                           </td>
                         </tr>
                       )
                     }) : (
-                      <tr><td colSpan="6"><EmptyState label="No alerts" /></td></tr>
+                      <tr><td colSpan="7"><EmptyState label="No alerts" /></td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1082,8 +1113,6 @@ function AppContent() {
               </article>
             </section>
           )}
-
-          {location.pathname === '/risk-overview' && <RiskOverview />}
 
           {location.pathname === '/reports' && <ReportsModule userRole={userRole} />}
 
